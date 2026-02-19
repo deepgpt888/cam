@@ -7,764 +7,910 @@
   <script src="https://unpkg.com/konva@9/konva.min.js"></script>
   <style>
     :root {
-      --bg-dark: #0f172a; --bg-card: #1e293b; --bg-hover: #334155;
-      --text-primary: #f1f5f9; --text-secondary: #94a3b8;
-      --accent: #3b82f6; --green: #22c55e; --yellow: #eab308;
-      --red: #ef4444; --orange: #f97316; --border: #334155;
+      --bg-dark:#0f172a;--bg-card:#1e293b;--bg-hover:#334155;
+      --text-primary:#f1f5f9;--text-secondary:#94a3b8;
+      --accent:#3b82f6;--green:#22c55e;--red:#ef4444;--orange:#f97316;--border:#334155;
     }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-           background: var(--bg-dark); color: var(--text-primary); }
-
-    .navbar { background: var(--bg-card); border-bottom: 1px solid var(--border);
-      padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; }
-    .navbar h1 { font-size: 18px; }
-    .nav-links { display: flex; gap: 4px; }
-    .nav-links a { color: var(--text-secondary); text-decoration: none; padding: 6px 14px;
-      border-radius: 6px; font-size: 13px; transition: .15s; }
-    .nav-links a:hover, .nav-links a.active { background: var(--bg-hover); color: var(--text-primary); }
-
-    .editor { display: grid; grid-template-columns: 1fr 340px; gap: 16px;
-      padding: 16px; height: calc(100vh - 50px); }
-    @media (max-width: 960px) { .editor { grid-template-columns: 1fr; } }
-
-    .canvas-panel { background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 10px; display: flex; flex-direction: column; overflow: hidden; }
-    .canvas-bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px;
-      border-bottom: 1px solid var(--border); flex-wrap: wrap; }
-    .canvas-bar .cam-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-right: auto; }
-    .tb { padding: 5px 12px; border: 1px solid var(--border); border-radius: 5px;
-      background: var(--bg-hover); color: var(--text-primary); font-size: 12px;
-      cursor: pointer; transition: .15s; user-select: none; }
-    .tb:hover { border-color: var(--accent); color: #fff; }
-    .tb.active { background: var(--orange); border-color: var(--orange); color: #fff;
-      box-shadow: 0 0 10px rgba(249,115,22,.35); }
-    .tb.danger:hover { border-color: var(--red); background: var(--red); }
-    .canvas-body { flex: 1; position: relative; background: #111;
-      display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    #konva-container { position: relative; }
-    .canvas-footer { padding: 6px 12px; font-size: 11px; color: var(--text-secondary);
-      border-top: 1px solid var(--border); min-height: 28px; }
-    .canvas-footer.active { color: var(--orange); font-weight: 600; }
-
-    .sidebar { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
-    .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-    .card.hl { border-color: var(--orange); box-shadow: 0 0 12px rgba(249,115,22,.12); }
-    .card-hdr { font-size: 13px; font-weight: 600; margin-bottom: 12px;
-      padding-bottom: 10px; border-bottom: 1px solid var(--border);
-      display: flex; align-items: center; gap: 8px; }
-    .badge { width: 20px; height: 20px; border-radius: 50%; display: inline-flex;
-      align-items: center; justify-content: center;
-      background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0; }
-    .badge.on { background: var(--orange); animation: pulse 1.4s infinite; }
-    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(249,115,22,.35)} 50%{box-shadow:0 0 0 6px rgba(249,115,22,0)} }
-
-    .row-f { display: flex; gap: 10px; }
-    .field { flex: 1; margin-bottom: 10px; }
-    .field label { display: block; font-size: 11px; color: var(--text-secondary);
-      margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
-    .field input, .field select { width: 100%; padding: 8px 10px; background: var(--bg-dark);
-      border: 1px solid var(--border); border-radius: 5px; color: var(--text-primary); font-size: 13px; }
-    .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
-
-    .btn { width: 100%; padding: 10px; border: none; border-radius: 7px;
-      font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s; margin-bottom: 6px; }
-    .btn:last-child { margin-bottom: 0; }
-    .btn-blue { background: var(--accent); color: #fff; }
-    .btn-orange { background: var(--orange); color: #fff; }
-    .btn-green { background: var(--green); color: #fff; }
-    .btn-red { background: var(--red); color: #fff; }
-    .btn-ghost { background: var(--bg-hover); color: var(--text-primary); }
-    .btn:hover { opacity: .9; }
-    .btn:disabled { opacity: .35; cursor: not-allowed; }
-    .hint { font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-top: 6px; }
-
-    .zone-list { max-height: 240px; overflow-y: auto; }
-    .z-item { display: flex; align-items: center; justify-content: space-between;
-      padding: 8px 10px; background: var(--bg-dark); border-radius: 5px;
-      margin-bottom: 4px; font-size: 12px; cursor: pointer;
-      border: 1px solid transparent; transition: .15s; }
-    .z-item:hover { background: var(--bg-hover); }
-    .z-item.sel { border-color: var(--accent); }
-    .z-item .nm { font-weight: 600; }
-    .z-item .mt { color: var(--text-secondary); font-size: 10px; }
-    .z-item .del { background: none; border: none; color: var(--red); cursor: pointer; font-size: 16px; padding: 0 2px; }
-    .cnt { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
-    .cnt b { color: var(--accent); }
-
-    .draw-pts { font-size: 12px; color: var(--orange); font-weight: 600;
-      margin-bottom: 8px; padding: 6px 10px; background: rgba(249,115,22,.08);
-      border: 1px solid rgba(249,115,22,.3); border-radius: 5px; display: none; }
-    .draw-pts.show { display: block; }
-
-    .toast { position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
-      border-radius: 7px; font-size: 13px; font-weight: 500; z-index: 9999;
-      animation: fadeUp .25s ease; }
-    .toast-ok { background: var(--green); color: #fff; }
-    .toast-err { background: var(--red); color: #fff; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:var(--bg-dark);color:var(--text-primary);}
+    .navbar{background:var(--bg-card);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;}
+    .navbar h1{font-size:18px;}
+    .nav-links{display:flex;gap:4px;}
+    .nav-links a{color:var(--text-secondary);text-decoration:none;padding:6px 14px;border-radius:6px;font-size:13px;transition:.15s;}
+    .nav-links a:hover,.nav-links a.active{background:var(--bg-hover);color:var(--text-primary);}
+    .editor{display:grid;grid-template-columns:1fr 340px;gap:16px;padding:16px;height:calc(100vh - 50px);}
+    @media(max-width:960px){.editor{grid-template-columns:1fr;}}
+    .canvas-panel{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;display:flex;flex-direction:column;overflow:hidden;}
+    .canvas-bar{display:flex;align-items:center;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);flex-wrap:wrap;}
+    .canvas-bar .cam-label{font-size:13px;font-weight:600;color:var(--text-secondary);margin-right:auto;}
+    .tb{padding:5px 12px;border:1px solid var(--border);border-radius:5px;background:var(--bg-hover);color:var(--text-primary);font-size:12px;cursor:pointer;transition:.15s;user-select:none;}
+    .tb:hover{border-color:var(--accent);color:#fff;}
+    .tb.active{background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 0 10px rgba(249,115,22,.35);}
+    .tb.danger:hover{border-color:var(--red);background:var(--red);}
+    .canvas-body{flex:1;position:relative;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+    #k-wrap{position:relative;}
+    .canvas-footer{padding:6px 12px;font-size:11px;color:var(--text-secondary);border-top:1px solid var(--border);min-height:28px;}
+    .canvas-footer.active{color:var(--orange);font-weight:600;}
+    .sidebar{display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+    .card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;}
+    .card.hl{border-color:var(--orange);box-shadow:0 0 12px rgba(249,115,22,.12);}
+    .card-hdr{font-size:13px;font-weight:600;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+    .badge{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--accent);color:#fff;font-size:11px;font-weight:700;flex-shrink:0;}
+    .badge.on{background:var(--orange);animation:pulse 1.4s infinite;}
+    @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(249,115,22,.35)}50%{box-shadow:0 0 0 6px rgba(249,115,22,0)}}
+    .row-f{display:flex;gap:10px;}
+    .field{flex:1;margin-bottom:10px;}
+    .field label{display:block;font-size:11px;color:var(--text-secondary);margin-bottom:4px;text-transform:uppercase;letter-spacing:.03em;}
+    .field input,.field select{width:100%;padding:8px 10px;background:var(--bg-dark);border:1px solid var(--border);border-radius:5px;color:var(--text-primary);font-size:13px;}
+    .field input:focus,.field select:focus{outline:none;border-color:var(--accent);}
+    .btn{width:100%;padding:10px;border:none;border-radius:7px;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;margin-bottom:6px;}
+    .btn:last-child{margin-bottom:0;}
+    .btn-orange{background:var(--orange);color:#fff;}
+    .btn-green{background:var(--green);color:#fff;}
+    .btn-red{background:var(--red);color:#fff;}
+    .btn-ghost{background:var(--bg-hover);color:var(--text-primary);}
+    .btn:hover{opacity:.9;}
+    .btn:disabled{opacity:.35;cursor:not-allowed;}
+    .hint{font-size:11px;color:var(--text-secondary);line-height:1.5;margin-top:6px;}
+    .draw-status{font-size:12px;color:var(--orange);font-weight:600;margin-bottom:8px;padding:6px 10px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.3);border-radius:5px;display:none;}
+    .draw-status.show{display:block;}
+    .zone-list{max-height:250px;overflow-y:auto;}
+    .z-item{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--bg-dark);border-radius:5px;margin-bottom:4px;font-size:12px;cursor:pointer;border:1px solid transparent;transition:.15s;}
+    .z-item:hover{background:var(--bg-hover);}
+    .z-item.sel{border-color:var(--accent);}
+    .z-item .nm{font-weight:600;}
+    .z-item .mt{color:var(--text-secondary);font-size:10px;margin-left:4px;}
+    .z-item .del{background:none;border:none;color:var(--red);cursor:pointer;font-size:16px;padding:0 2px;}
+    .cnt{font-size:12px;color:var(--text-secondary);margin-bottom:8px;}
+    .cnt b{color:var(--accent);}
+    .toast{position:fixed;bottom:20px;right:20px;padding:12px 20px;border-radius:7px;font-size:13px;font-weight:500;z-index:9999;animation:fadeUp .25s ease;}
+    .toast-ok{background:var(--green);color:#fff;}
+    .toast-err{background:var(--red);color:#fff;}
+    @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
   </style>
 </head>
 <body>
-  <nav class="navbar">
-    <h1>CamPark</h1>
-    <div class="nav-links">
-      <a href="/admin/dashboard">Dashboard</a>
-      <a href="/admin/cameras">Cameras</a>
-      <a href="/admin/zones" class="active">Zones</a>
-      <a href="/admin/events">Events</a>
-      <a href="/admin/tokens">Tokens</a>
-      <a href="/admin/integrations">Integrations</a>
-      <a href="/admin/scada">SCADA</a>
-      <a href="/admin/system">System</a>
-      <a href="/logout" style="color:var(--red)">Logout</a>
+<nav class="navbar">
+  <h1>CamPark</h1>
+  <div class="nav-links">
+    <a href="/admin/dashboard">Dashboard</a>
+    <a href="/admin/cameras">Cameras</a>
+    <a href="/admin/zones" class="active">Zones</a>
+    <a href="/admin/events">Events</a>
+    <a href="/admin/tokens">Tokens</a>
+    <a href="/admin/integrations">Integrations</a>
+    <a href="/admin/scada">SCADA</a>
+    <a href="/admin/system">System</a>
+    <a href="/logout" style="color:var(--red)">Logout</a>
+  </div>
+</nav>
+
+<div class="editor">
+  <div class="canvas-panel">
+    <div class="canvas-bar">
+      <span class="cam-label">Camera: {{ camera_id }}</span>
+      <button class="tb" id="btn-draw" onclick="startDraw()">&#9632; Draw Area</button>
+      <button class="tb" id="btn-cancel" style="display:none" onclick="cancelDraw()">&#10005; Cancel</button>
+      <button class="tb" onclick="deleteSelected()">&#128465; Delete</button>
+      <button class="tb" onclick="duplicateSelected()">&#10697; Duplicate</button>
+      <button class="tb danger" onclick="clearAll()">&#10005; Clear All</button>
     </div>
-  </nav>
-
-  <div class="editor">
-    <div class="canvas-panel">
-      <div class="canvas-bar">
-        <span class="cam-label">Camera: {{ camera_id }}</span>
-        <button class="tb" id="btn-draw" onclick="startDraw()">&#9632; Draw Area (4 pts)</button>
-        <button class="tb" onclick="cancelDraw()" id="btn-cancel" style="display:none">&#10005; Cancel</button>
-        <button class="tb" onclick="deleteSelected()">&#128465; Delete</button>
-        <button class="tb" onclick="duplicateSelected()">&#10697; Duplicate</button>
-        <button class="tb danger" onclick="clearAll()">&#10005; Clear All</button>
-      </div>
-      <div class="canvas-body">
-        <div id="konva-container"></div>
-      </div>
-      <div class="canvas-footer" id="footer">
-        Click <b>Draw Area (4 pts)</b> to start &mdash; click 4 corner points to define the parking quad.
-      </div>
+    <div class="canvas-body">
+      <div id="k-wrap"></div>
     </div>
-
-    <div class="sidebar">
-      <div class="card" id="c1">
-        <div class="card-hdr"><span class="badge" id="b1">1</span> Draw Parking Area</div>
-        <div class="draw-pts" id="draw-pts-status"></div>
-        <p class="hint">Click <b>Draw Area (4 pts)</b>, then click the <b>4 corners</b> of the parking boundary. The quad closes automatically on the 4th click. Can be a trapezoid/parallelogram — any shape.</p>
-      </div>
-
-      <div class="card" id="c2">
-        <div class="card-hdr"><span class="badge" id="b2">2</span> Split into Spaces</div>
-        <div class="row-f">
-          <div class="field"><label>Spaces (cols)</label><input id="inp-spaces" type="number" min="1" max="50" value="5"></div>
-          <div class="field"><label>Rows</label><input id="inp-rows" type="number" min="1" max="10" value="1"></div>
-        </div>
-        <div class="row-f">
-          <div class="field"><label>Prefix</label><input id="inp-prefix" value="A" maxlength="3"></div>
-          <div class="field"><label>Start #</label><input id="inp-start" type="number" min="1" value="1"></div>
-        </div>
-        <div class="row-f">
-          <div class="field">
-            <label>Direction</label>
-            <select id="inp-dir">
-              <option value="inc">Increasing (A01&#8594;A05)</option>
-              <option value="dec">Decreasing (A05&#8594;A01)</option>
-            </select>
-          </div>
-          <div class="field"><label>Gap %</label><input id="inp-gap" type="number" min="0" max="20" step="1" value="2"></div>
-        </div>
-        <button class="btn btn-orange" id="btn-split" onclick="splitArea()" disabled>Split into Spaces</button>
-        <p class="hint">Generates perspective-correct trapezoid spaces matching actual parking angle. Each space is individually editable.</p>
-      </div>
-
-      <div class="card" id="c3">
-        <div class="card-hdr"><span class="badge" id="b3">3</span> Fine-Tune Zones</div>
-        <div class="cnt">Zones: <b id="zcnt">0</b></div>
-        <div class="zone-list" id="zlist">
-          <div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div>
-        </div>
-        <p class="hint" style="margin-top:8px;">
-          Click to select &bull; Drag <b style="color:#f97316">orange corner</b> handles to warp &bull; Drag <b style="color:#3b82f6">blue edge</b> handles to shift a full edge &bull; Drag <b>inside</b> to translate &bull; <b>Delete</b> key removes.
-        </p>
-      </div>
-
-      <div class="card">
-        <div class="card-hdr">&#128190; Save</div>
-        <button class="btn btn-green" onclick="saveZones(false)">Save All Zones</button>
-        <button class="btn btn-red" onclick="saveZones(true)">Replace All (Clear + Save)</button>
-        <p class="hint"><b>Save All</b> adds/updates. <b>Replace All</b> deletes existing zones for this camera first.</p>
-      </div>
+    <div class="canvas-footer" id="footer">
+      Click <b>Draw Area</b> then click <b>4 corner points</b> to outline the parking boundary.
     </div>
   </div>
 
-  <script>
-  /* ================================================================
-     GEOMETRY  (pure — normalized coords [0..1])
-  ================================================================ */
-  const G = {
-    lerp(a, b, t) {
-      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-    },
-    clamp(p) {
-      return { x: Math.min(1, Math.max(0, p.x)), y: Math.min(1, Math.max(0, p.y)) };
-    },
-    centroid(pts) {
-      return { x: pts.reduce((s,p)=>s+p.x,0)/pts.length, y: pts.reduce((s,p)=>s+p.y,0)/pts.length };
-    },
+  <div class="sidebar">
+    <div class="card" id="c1">
+      <div class="card-hdr"><span class="badge" id="b1">1</span> Draw Parking Area</div>
+      <div class="draw-status" id="ds"></div>
+      <p class="hint">Click <b>Draw Area</b>, then click the <b>4 corners</b> of the parking section (any corner order — the quad auto-closes). Supports any trapezoid shape.</p>
+    </div>
 
-    /* Order 4 points into [TL, TR, BR, BL] clockwise */
-    orderQuad(pts) {
-      const c = this.centroid(pts);
-      const sorted = [...pts].sort((a,b)=>Math.atan2(a.y-c.y,a.x-c.x)-Math.atan2(b.y-c.y,b.x-c.x));
-      let minIdx=0, minVal=sorted[0].x+sorted[0].y;
-      for(let i=1;i<4;i++){const v=sorted[i].x+sorted[i].y; if(v<minVal){minVal=v;minIdx=i;}}
-      let ordered=[];
-      for(let i=0;i<4;i++) ordered.push(sorted[(minIdx+i)%4]);
-      // Ensure clockwise
-      const ax=ordered[1].x-ordered[0].x,ay=ordered[1].y-ordered[0].y;
-      const bx=ordered[2].x-ordered[1].x,by=ordered[2].y-ordered[1].y;
-      if((ax*by-ay*bx)<0) ordered.reverse();
-      // Re-find TL after possible reverse
-      let mi=0,mv=ordered[0].x+ordered[0].y;
-      for(let i=1;i<4;i++){const v=ordered[i].x+ordered[i].y; if(v<mv){mv=v;mi=i;}}
-      const r=[];
-      for(let i=0;i<4;i++) r.push(ordered[(mi+i)%4]);
-      return r; // [TL,TR,BR,BL]
-    },
+    <div class="card" id="c2">
+      <div class="card-hdr"><span class="badge" id="b2">2</span> Split into Spaces</div>
+      <div class="row-f">
+        <div class="field"><label>Spaces (cols)</label><input id="inp-cols" type="number" min="1" max="50" value="5"></div>
+        <div class="field"><label>Rows</label><input id="inp-rows" type="number" min="1" max="10" value="1"></div>
+      </div>
+      <div class="row-f">
+        <div class="field"><label>Prefix</label><input id="inp-prefix" value="A" maxlength="3"></div>
+        <div class="field"><label>Gap %</label><input id="inp-gap" type="number" min="0" max="20" value="2"></div>
+      </div>
+      <div class="row-f">
+        <div class="field">
+          <label>Direction</label>
+          <select id="inp-dir">
+            <option value="inc">Increasing (A01&#8594;)</option>
+            <option value="dec">Decreasing (&#8594;A01)</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-orange" id="btn-split" onclick="splitArea()" disabled>Split into Spaces</button>
+      <p class="hint">Generates perspective-correct trapezoid spaces. Spaces are parented to the area — warp the area and all spaces follow.</p>
+    </div>
 
-    isConvexQuad(q) {
-      const signs=[];
-      for(let i=0;i<4;i++){
-        const a=q[i],b=q[(i+1)%4],c=q[(i+2)%4];
-        signs.push((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x)>=0);
+    <div class="card" id="c3">
+      <div class="card-hdr"><span class="badge" id="b3">3</span> Fine-Tune</div>
+      <div class="cnt">Groups: <b id="gcnt">0</b> &nbsp; Spaces: <b id="scnt">0</b></div>
+      <div class="zone-list" id="zlist"><div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div></div>
+      <p class="hint" style="margin-top:8px;">
+        Click to select. <b>No visible handles</b> — drag near a <b>corner</b> to warp, near an <b>edge</b> to shift that edge, or drag <b>inside</b> to move. Cursor changes to indicate the action.
+      </p>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">&#128190; Save</div>
+      <button class="btn btn-green" onclick="saveZones(false)">Save All Zones</button>
+      <button class="btn btn-red" onclick="saveZones(true)">Replace All (Clear + Save)</button>
+      <p class="hint"><b>Save All</b> adds/updates. <b>Replace All</b> wipes existing zones for this camera first.</p>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ================================================================
+   GEOMETRY MODULE
+================================================================ */
+const G = {
+
+  /* --- basic --- */
+  lerp(a,b,t){ return {x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t}; },
+  lerpUV(a,b,t){ return {u:a.u+(b.u-a.u)*t, v:a.v+(b.v-a.v)*t}; },
+  clampN(p){ return {x:Math.min(1,Math.max(0,p.x)), y:Math.min(1,Math.max(0,p.y))}; },
+  clampUV(uv){ return {u:Math.min(1,Math.max(0,uv.u)), v:Math.min(1,Math.max(0,uv.v))}; },
+  dist(a,b){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2); },
+  centroid(pts){ return {x:pts.reduce((s,p)=>s+p.x,0)/pts.length, y:pts.reduce((s,p)=>s+p.y,0)/pts.length}; },
+
+  /* --- quad ordering: returns [TL, TR, BR, BL] clockwise --- */
+  orderQuad(pts){
+    const c=this.centroid(pts);
+    const s=[...pts].sort((a,b)=>Math.atan2(a.y-c.y,a.x-c.x)-Math.atan2(b.y-c.y,b.x-c.x));
+    let mi=0,mv=s[0].x+s[0].y;
+    for(let i=1;i<4;i++){const v=s[i].x+s[i].y; if(v<mv){mv=v;mi=i;}}
+    let o=[]; for(let i=0;i<4;i++) o.push(s[(mi+i)%4]);
+    const ax=o[1].x-o[0].x,ay=o[1].y-o[0].y,bx=o[2].x-o[1].x,by=o[2].y-o[1].y;
+    if((ax*by-ay*bx)<0) o.reverse();
+    let mi2=0,mv2=o[0].x+o[0].y;
+    for(let i=1;i<4;i++){const v=o[i].x+o[i].y; if(v<mv2){mv2=v;mi2=i;}}
+    const r=[]; for(let i=0;i<4;i++) r.push(o[(mi2+i)%4]);
+    return r;
+  },
+
+  isConvexQuad(q){
+    const sgn=[];
+    for(let i=0;i<4;i++){
+      const a=q[i],b=q[(i+1)%4],c=q[(i+2)%4];
+      sgn.push((b.x-a.x)*(c.y-b.y)-(b.y-a.y)*(c.x-b.x)>=0);
+    }
+    return sgn.every(s=>s)||sgn.every(s=>!s);
+  },
+
+  /* --- UV <-> image mapping ---
+     Bilinear: P(u,v) = TL*(1-u)*(1-v) + TR*u*(1-v) + BR*u*v + BL*(1-u)*v
+     quad = [TL,TR,BR,BL] in image-normalized [0..1]
+  */
+  uvToImage(quad,uv){
+    const [TL,TR,BR,BL]=quad, u=uv.u, v=uv.v;
+    return {
+      x: TL.x*(1-u)*(1-v) + TR.x*u*(1-v) + BR.x*u*v + BL.x*(1-u)*v,
+      y: TL.y*(1-u)*(1-v) + TR.y*u*(1-v) + BR.y*u*v + BL.y*(1-u)*v,
+    };
+  },
+
+  uvQuadToImage(quad,uvq){
+    return uvq.map(uv=>this.uvToImage(quad,uv));
+  },
+
+  /* Inverse: image point -> UV via barycentric decomposition into 2 triangles */
+  imageToUv(quad,p){
+    const [TL,TR,BR,BL]=quad;
+    // Triangle 1: TL(u=0,v=0), TR(u=1,v=0), BR(u=1,v=1)
+    let r=this._bary(TL,TR,BR,p);
+    if(r && r.s>=0 && r.t>=0 && r.s+r.t<=1){
+      // bary: λTL=1-s-t, λTR=t, λBR=s  mapped to uv: TL(0,0),TR(1,0),BR(1,1)
+      const u=r.t+r.s, v2=r.s;
+      return this.clampUV({u,v:v2});
+    }
+    // Triangle 2: TL(u=0,v=0), BR(u=1,v=1), BL(u=0,v=1)
+    r=this._bary(TL,BR,BL,p);
+    if(r && r.s>=0 && r.t>=0 && r.s+r.t<=1){
+      // bary: wTL=1-s-t, wBR=t, wBL=s  mapped to uv: TL(0,0),BR(1,1),BL(0,1)
+      const u=r.t, v2=r.t+r.s;
+      return this.clampUV({u,v:v2});
+    }
+    // Outside quad — clamp to nearest anyway (for drag tolerance)
+    const u=Math.min(1,Math.max(0,(p.x-TL.x)/(TR.x-TL.x||.001)));
+    const v=Math.min(1,Math.max(0,(p.y-TL.y)/(BL.y-TL.y||.001)));
+    return {u,v};
+  },
+
+  _bary(A,B,C,P){
+    const v0x=C.x-A.x,v0y=C.y-A.y;
+    const v1x=B.x-A.x,v1y=B.y-A.y;
+    const v2x=P.x-A.x,v2y=P.y-A.y;
+    const d00=v0x*v0x+v0y*v0y;
+    const d01=v0x*v1x+v0y*v1y;
+    const d02=v0x*v2x+v0y*v2y;
+    const d11=v1x*v1x+v1y*v1y;
+    const d12=v1x*v2x+v1y*v2y;
+    const inv=d00*d11-d01*d01;
+    if(Math.abs(inv)<1e-10) return null;
+    const s=(d11*d02-d01*d12)/inv;
+    const t=(d00*d12-d01*d02)/inv;
+    return {s,t};
+  },
+
+  /* --- UV grid split --- cols x rows, returns array of uvQuads [TL,TR,BR,BL] */
+  splitUvGrid(cols,rows,gapPct=0){
+    const g=gapPct/100;
+    const result=[];
+    for(let r=0;r<rows;r++){
+      const rg=g*0.5/Math.max(rows,1);
+      const v0=r/rows+rg, v1=(r+1)/rows-rg;
+      for(let c=0;c<cols;c++){
+        const cg=g*0.5/Math.max(cols,1);
+        const u0=c/cols+cg, u1=(c+1)/cols-cg;
+        result.push([{u:u0,v:v0},{u:u1,v:v0},{u:u1,v:v1},{u:u0,v:v1}]);
       }
-      return signs.every(s=>s)||signs.every(s=>!s);
-    },
+    }
+    return result;
+  },
 
-    /* Perspective-correct split of quad [TL,TR,BR,BL] into cols x rows sub-quads */
-    splitQuad(quad, cols, rows, gapPct=0) {
-      const [TL,TR,BR,BL] = quad;
-      const g = gapPct/100;
-      const spaces=[];
-      for(let r=0;r<rows;r++){
-        const rT0=r/rows, rT1=(r+1)/rows;
-        // Row inner boundaries with gap
-        const rGap = g*0.5/Math.max(rows,1);
-        const ir0=rT0+rGap, ir1=rT1-rGap;
-        const RowTL=this.lerp(TL,BL,ir0), RowTR=this.lerp(TR,BR,ir0);
-        const RowBL=this.lerp(TL,BL,ir1), RowBR=this.lerp(TR,BR,ir1);
-        for(let c=0;c<cols;c++){
-          const cT0=c/cols, cT1=(c+1)/cols;
-          const cGap=g*0.5/Math.max(cols,1);
-          const ic0=cT0+cGap, ic1=cT1-cGap;
-          const pTL=this.lerp(RowTL,RowTR,ic0);
-          const pTR=this.lerp(RowTL,RowTR,ic1);
-          const pBR=this.lerp(RowBL,RowBR,ic1);
-          const pBL=this.lerp(RowBL,RowBR,ic0);
-          spaces.push([pTL,pTR,pBR,pBL]);
-        }
-      }
-      return spaces;
-    },
+  /* --- hit testing (pixel space) --- */
+  pick(pPx, quadPx, cornerR=14, edgeD=11){
+    // corners first
+    for(let i=0;i<4;i++){
+      if(this.dist(pPx,quadPx[i])<cornerR) return {kind:'corner',index:i};
+    }
+    // edges: 0=TL-TR, 1=TR-BR, 2=BR-BL, 3=BL-TL
+    for(let i=0;i<4;i++){
+      const a=quadPx[i], b=quadPx[(i+1)%4];
+      if(this._ptSegDist(pPx,a,b)<edgeD) return {kind:'edge',index:i};
+    }
+    // inside
+    if(this._ptInPoly(pPx,quadPx)) return {kind:'move'};
+    return {kind:'none'};
+  },
 
-    /* 4 edge midpoints for quad [TL,TR,BR,BL] */
-    midpoints(q) {
-      return [
-        this.lerp(q[0],q[1],0.5), // top  edge
-        this.lerp(q[1],q[2],0.5), // right edge
-        this.lerp(q[2],q[3],0.5), // bottom edge
-        this.lerp(q[3],q[0],0.5), // left edge
-      ];
-    },
+  _ptSegDist(p,a,b){
+    const dx=b.x-a.x,dy=b.y-a.y;
+    const len2=dx*dx+dy*dy;
+    if(len2<1e-6) return this.dist(p,a);
+    const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/len2));
+    return this.dist(p,{x:a.x+t*dx,y:a.y+t*dy});
+  },
 
-    translateQuad(q, dx, dy) {
-      return q.map(p=>this.clamp({x:p.x+dx,y:p.y+dy}));
-    },
-  };
+  _ptInPoly(p,poly){
+    let inside=false;
+    for(let i=0,j=poly.length-1;i<poly.length;j=i++){
+      const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;
+      if(((yi>p.y)!=(yj>p.y))&&(p.x<(xj-xi)*(p.y-yi)/(yj-yi)+xi)) inside=!inside;
+    }
+    return inside;
+  },
 
-  /* ================================================================
-     NAMING
-  ================================================================ */
-  function genIds(prefix,start,count,dir){
+  cursorForPick(pick){
+    if(!pick||pick.kind==='none') return '';
+    if(pick.kind==='move') return 'move';
+    if(pick.kind==='corner'){
+      const cursors=['nwse-resize','nesw-resize','nwse-resize','nesw-resize'];
+      return cursors[pick.index];
+    }
+    if(pick.kind==='edge'){
+      return pick.index%2===0?'ns-resize':'ew-resize';
+    }
+    return '';
+  },
+
+  /* edge vertex index pairs */
+  edgeVerts(i){ return [[0,1],[1,2],[2,3],[3,0]][i]; },
+};
+
+/* ================================================================
+   NAMING MODULE
+================================================================ */
+const N = {
+  format(prefix,n,pad=2){ return prefix+String(n).padStart(pad,'0'); },
+  nextStart(spaces,prefix){
+    let max=0;
+    spaces.forEach(s=>{
+      const m=s.label.match(new RegExp('^'+prefix+'(\\d+)$','i'));
+      if(m) max=Math.max(max,parseInt(m[1]));
+    });
+    return max+1;
+  },
+  generate(prefix,start,count,dir='inc'){
     const ids=[];
     for(let i=0;i<count;i++){
       const n=dir==='dec'?start+count-1-i:start+i;
-      ids.push(prefix+String(n).padStart(2,'0'));
+      ids.push(this.format(prefix,n));
     }
     return ids;
+  },
+};
+
+/* ================================================================
+   UUID
+================================================================ */
+function uuid(){ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:r&0x3|0x8).toString(16);}); }
+
+/* ================================================================
+   PALETTE
+================================================================ */
+const PAL=[
+  {fill:'rgba(59,130,246,.20)',stroke:'#3b82f6'},
+  {fill:'rgba(34,197,94,.20)', stroke:'#22c55e'},
+  {fill:'rgba(234,179,8,.20)',stroke:'#eab308'},
+  {fill:'rgba(168,85,247,.20)',stroke:'#a855f7'},
+  {fill:'rgba(236,72,153,.20)',stroke:'#ec4899'},
+  {fill:'rgba(249,115,22,.20)',stroke:'#f97316'},
+  {fill:'rgba(20,184,166,.20)',stroke:'#14b8a6'},
+  {fill:'rgba(239,68,68,.20)',stroke:'#ef4444'},
+];
+let palIdx=0;
+
+/* ================================================================
+   STATE
+================================================================ */
+const CAM="{{ camera_id }}";
+let SW=1,SH=1;  // stage px dims
+
+/* groups: { groupId, quad:[{x,y}x4] norm, prefix, ci, createdAt } */
+/* spaces: { spaceId, groupId, label, uvQuad:[{u,v}x4], order, ci } */
+let groups=[], spaces=[];
+let selected=null; // {type:'group'|'space', id}
+
+/* active group being drawn into / about to split */
+let pendingGroupId=null;
+
+const DRAW='draw', EDIT='edit', IDLE='idle';
+let mode=IDLE;
+let drawPts=[];  // screen {x,y} during draw
+
+let drag=null;
+/* drag: { type:'group'|'space', id, pick, sx, sy,
+           origQuad (norm for group), origUvQuad (for space),
+           parentQuad (norm, for space) } */
+
+let konva, layer, hLayer; // handle layer on top
+
+/* ================================================================
+   INIT
+================================================================ */
+window.addEventListener('DOMContentLoaded',()=>loadBg());
+
+function initKonva(w,h){
+  SW=w; SH=h;
+  konva=new Konva.Stage({container:'k-wrap',width:SW,height:SH});
+  layer=new Konva.Layer();
+  hLayer=new Konva.Layer();
+  konva.add(layer); konva.add(hLayer);
+  konva.on('mousedown touchstart',onDown);
+  konva.on('mousemove touchmove',onMove);
+  konva.on('mouseup touchend',onUp);
+  document.addEventListener('keydown',e=>{
+    if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
+    if(e.key==='Delete'||e.key==='Backspace') deleteSelected();
+    if(e.key==='Escape'){ if(mode===DRAW) cancelDraw(); else deselect(); }
+  });
+}
+
+/* ================================================================
+   BACKGROUND
+================================================================ */
+function loadBg(){
+  fetch(`/api/v1/cameras/${CAM}/snapshot-latest`)
+    .then(r=>r.ok?r.blob():null)
+    .then(blob=>{
+      if(!blob){noBg();return;}
+      const url=URL.createObjectURL(blob);
+      const img=new window.Image();
+      img.onload=()=>{
+        const box=document.querySelector('.canvas-body');
+        const mW=box.clientWidth-4, mH=box.clientHeight-4;
+        const sc=Math.min(mW/img.width,mH/img.height,1);
+        SW=Math.round(img.width*sc); SH=Math.round(img.height*sc);
+        initKonva(SW,SH);
+        Konva.Image.fromURL(url,ki=>{
+          ki.setAttrs({x:0,y:0,width:SW,height:SH,listening:false});
+          layer.add(ki); layer.batchDraw();
+        });
+        loadExisting();
+      };
+      img.src=url;
+    })
+    .catch(()=>noBg());
+}
+function noBg(){
+  const box=document.querySelector('.canvas-body');
+  SW=box.clientWidth-4; SH=box.clientHeight-4;
+  initKonva(SW,SH);
+  layer.add(new Konva.Text({x:SW/2,y:SH/2,text:'No snapshot — upload via FTP first',
+    fontSize:15,fill:'#94a3b8',align:'center',offsetX:160,listening:false}));
+  layer.batchDraw(); loadExisting();
+}
+
+/* ================================================================
+   COORD HELPERS
+================================================================ */
+const toN=(sx,sy)=>({x:sx/SW,y:sy/SH});
+const toS=(p)=>({x:p.x*SW,y:p.y*SH});
+const qToS=(q)=>q.map(toS);
+
+/* ================================================================
+   DRAW MODE
+================================================================ */
+function startDraw(){
+  if(mode===DRAW) return;
+  cancelDraw(false);
+  mode=DRAW; drawPts=[];
+  deselect();
+  document.getElementById('btn-draw').classList.add('active');
+  document.getElementById('btn-cancel').style.display='';
+  document.getElementById('b1').classList.add('on');
+  document.getElementById('c1').classList.add('hl');
+  setFooter('DRAW MODE — click 4 corner points of the parking boundary',true);
+  updDS();
+  konva.container().style.cursor='crosshair';
+}
+
+function cancelDraw(reset=true){
+  drawPts=[];
+  if(reset) mode=IDLE;
+  document.getElementById('btn-draw').classList.remove('active');
+  document.getElementById('btn-cancel').style.display='none';
+  document.getElementById('b1').classList.remove('on');
+  document.getElementById('c1').classList.remove('hl');
+  setFooter('Click <b>Draw Area</b> then click <b>4 corner points</b>.',false);
+  updDS(); redraw();
+  konva.container().style.cursor='';
+}
+
+function updDS(){
+  const el=document.getElementById('ds');
+  if(mode===DRAW){
+    el.className='draw-status show';
+    el.textContent=drawPts.length+' / 4 points'+(drawPts.length>0?' — click next corner':'');
+  } else { el.className='draw-status'; }
+}
+
+/* ================================================================
+   EVENTS
+================================================================ */
+function getPtr(){ return konva.getPointerPosition()||{x:0,y:0}; }
+
+function onDown(e){
+  const pos=getPtr();
+
+  if(mode===DRAW){
+    drawPts.push({x:pos.x,y:pos.y});
+    updDS();
+    if(drawPts.length===4) finishDraw();
+    else redraw();
+    return;
   }
 
-  /* ================================================================
-     PALETTE
-  ================================================================ */
-  const PAL=[
-    {fill:'rgba(59,130,246,.22)', stroke:'#3b82f6'},
-    {fill:'rgba(34,197,94,.22)',  stroke:'#22c55e'},
-    {fill:'rgba(234,179,8,.22)',  stroke:'#eab308'},
-    {fill:'rgba(168,85,247,.22)', stroke:'#a855f7'},
-    {fill:'rgba(236,72,153,.22)', stroke:'#ec4899'},
-    {fill:'rgba(249,115,22,.22)', stroke:'#f97316'},
-    {fill:'rgba(20,184,166,.22)', stroke:'#14b8a6'},
-    {fill:'rgba(239,68,68,.22)',  stroke:'#ef4444'},
-  ];
-  let palIdx=0;
+  /* Hit test: check spaces first (smaller targets), then groups */
+  const hit=hitTest(pos);
+  if(!hit){deselect();return;}
 
-  /* ================================================================
-     STATE
-  ================================================================ */
-  const CAM="{{ camera_id }}";
-  let SW=1, SH=1;    // stage dimensions (px)
+  /* Select */
+  selected={type:hit.type,id:hit.id};
 
-  /* Zone: {id, quad:[{x,y}x4] normalized, type:'area'|'space', ci, areaId?} */
-  let zones=[];
-  let selectedId=null;
-  let areaZoneId=null;
+  const quadPx=getQuadPxForId(hit.type,hit.id);
+  const pick=G.pick(pos,quadPx);
 
-  const MODE={IDLE:'idle',DRAW:'draw',EDIT:'edit'};
-  let mode=MODE.IDLE;
-  let drawPoints=[];   // screen {x,y} while clicking
+  if(pick.kind==='none'){deselect();return;}
 
-  /* Drag: {type:'corner'|'midpoint'|'body', zoneId, idx, origQuad, sx, sy} */
-  let dragging=null;
+  /* Set up drag */
+  if(hit.type==='group'){
+    const g=groups.find(x=>x.groupId===hit.id);
+    drag={type:'group',id:hit.id,pick,sx:pos.x,sy:pos.y,origQuad:g.quad.map(p=>({...p}))};
+  } else {
+    const sp=spaces.find(x=>x.spaceId===hit.id);
+    const grp=groups.find(x=>x.groupId===sp.groupId);
+    drag={type:'space',id:hit.id,pick,sx:pos.x,sy:pos.y,
+      origUvQuad:sp.uvQuad.map(uv=>({...uv})),
+      parentQuad:grp?grp.quad.map(p=>({...p})):null};
+  }
 
-  let stage, layer, handleLayer;
+  konva.container().style.cursor=G.cursorForPick(pick)||'grabbing';
+  redraw();
+}
 
-  /* ================================================================
-     INIT
-  ================================================================ */
-  window.addEventListener('DOMContentLoaded', ()=>loadBg());
+function onMove(e){
+  const pos=getPtr();
 
-  function initKonva(w,h){
-    SW=w; SH=h;
-    stage=new Konva.Stage({container:'konva-container',width:SW,height:SH});
-    layer=new Konva.Layer();
-    handleLayer=new Konva.Layer();
-    stage.add(layer); stage.add(handleLayer);
-    stage.on('mousedown touchstart', onDown);
-    stage.on('mousemove touchmove',  onMove);
-    stage.on('mouseup touchend',     onUp);
-    document.addEventListener('keydown',e=>{
-      if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
-      if(e.key==='Delete'||e.key==='Backspace') deleteSelected();
-      if(e.key==='Escape'){ if(mode===MODE.DRAW) cancelDraw(); else deselect(); }
+  /* cursor feedback when not dragging */
+  if(!drag){
+    const hit=hitTest(pos);
+    if(hit){
+      const qpx=getQuadPxForId(hit.type,hit.id);
+      const pk=G.pick(pos,qpx);
+      konva.container().style.cursor=G.cursorForPick(pk)||'default';
+    } else {
+      konva.container().style.cursor=mode===DRAW?'crosshair':'';
+    }
+    return;
+  }
+
+  const dx=(pos.x-drag.sx)/SW, dy=(pos.y-drag.sy)/SH;
+  const pick=drag.pick;
+
+  if(drag.type==='group'){
+    const g=groups.find(x=>x.groupId===drag.id);
+    if(!g) return;
+    const q=drag.origQuad.map(p=>({...p}));
+    if(pick.kind==='corner'){
+      q[pick.index]=G.clampN({x:q[pick.index].x+dx,y:q[pick.index].y+dy});
+    } else if(pick.kind==='edge'){
+      const [ia,ib]=G.edgeVerts(pick.index);
+      q[ia]=G.clampN({x:q[ia].x+dx,y:q[ia].y+dy});
+      q[ib]=G.clampN({x:q[ib].x+dx,y:q[ib].y+dy});
+    } else if(pick.kind==='move'){
+      q.forEach(p=>{p.x+=dx;p.y+=dy;});
+      q.forEach((p,i)=>q[i]=G.clampN(p));
+    }
+    g.quad=q;
+  } else {
+    const sp=spaces.find(x=>x.spaceId===drag.id);
+    if(!sp||!drag.parentQuad) return;
+    /* Convert drag delta from image space to UV delta using parent quad */
+    const startN=toN(drag.sx,drag.sy);
+    const curN=toN(pos.x,pos.y);
+    const startUV=G.imageToUv(drag.parentQuad,startN);
+    const curUV=G.imageToUv(drag.parentQuad,curN);
+    const du=curUV.u-startUV.u, dv=curUV.v-startUV.v;
+    const uvq=drag.origUvQuad.map(uv=>({...uv}));
+    if(pick.kind==='corner'){
+      uvq[pick.index]=G.clampUV({u:uvq[pick.index].u+du,v:uvq[pick.index].v+dv});
+    } else if(pick.kind==='edge'){
+      const [ia,ib]=G.edgeVerts(pick.index);
+      uvq[ia]=G.clampUV({u:uvq[ia].u+du,v:uvq[ia].v+dv});
+      uvq[ib]=G.clampUV({u:uvq[ib].u+du,v:uvq[ib].v+dv});
+    } else if(pick.kind==='move'){
+      uvq.forEach(uv=>{uv.u+=du;uv.v+=dv;});
+      uvq.forEach((uv,i)=>uvq[i]=G.clampUV(uv));
+    }
+    sp.uvQuad=uvq;
+  }
+  redraw();
+}
+
+function onUp(){
+  if(drag){ drag=null; refreshList(); }
+  konva.container().style.cursor=mode===DRAW?'crosshair':'';
+}
+
+/* ================================================================
+   HIT TEST
+================================================================ */
+function hitTest(pos){
+  /* spaces first (smaller, should take priority) */
+  for(const sp of [...spaces].reverse()){
+    const grp=groups.find(g=>g.groupId===sp.groupId);
+    if(!grp) continue;
+    const imgQuad=G.uvQuadToImage(grp.quad,sp.uvQuad);
+    const qpx=qToS(imgQuad);
+    const pk=G.pick(pos,qpx);
+    if(pk.kind!=='none') return {type:'space',id:sp.spaceId};
+  }
+  /* then groups */
+  for(const grp of [...groups].reverse()){
+    const qpx=qToS(grp.quad);
+    const pk=G.pick(pos,qpx);
+    if(pk.kind!=='none') return {type:'group',id:grp.groupId};
+  }
+  return null;
+}
+
+function getQuadPxForId(type,id){
+  if(type==='group'){
+    const g=groups.find(x=>x.groupId===id);
+    return g?qToS(g.quad):[];
+  }
+  const sp=spaces.find(x=>x.spaceId===id);
+  if(!sp) return [];
+  const grp=groups.find(x=>x.groupId===sp.groupId);
+  if(!grp) return [];
+  return qToS(G.uvQuadToImage(grp.quad,sp.uvQuad));
+}
+
+/* ================================================================
+   FINISH DRAW
+================================================================ */
+function finishDraw(){
+  const normPts=drawPts.map(p=>toN(p.x,p.y));
+  const ordered=G.orderQuad(normPts);
+  const gid=uuid();
+  const ci=palIdx++%PAL.length;
+  groups.push({groupId:gid,quad:ordered,prefix:'A',ci,createdAt:Date.now()});
+  pendingGroupId=gid;
+  selected={type:'group',id:gid};
+  document.getElementById('btn-split').disabled=false;
+  document.getElementById('b2').classList.add('on');
+  document.getElementById('c2').classList.add('hl');
+  cancelDraw(true);
+  mode=EDIT;
+  redraw(); refreshList();
+  toast('Area drawn — set spaces/rows and click Split.','ok');
+}
+
+/* ================================================================
+   SPLIT
+================================================================ */
+function splitArea(){
+  if(!pendingGroupId){toast('Draw an area first','err');return;}
+  const grp=groups.find(g=>g.groupId===pendingGroupId);
+  if(!grp){toast('Area not found','err');return;}
+  const cols=Math.max(1,parseInt(document.getElementById('inp-cols').value)||5);
+  const rows=Math.max(1,parseInt(document.getElementById('inp-rows').value)||1);
+  const prefix=document.getElementById('inp-prefix').value||'A';
+  const gapPct=parseFloat(document.getElementById('inp-gap').value)||2;
+  const dir=document.getElementById('inp-dir').value;
+  const total=cols*rows;
+
+  /* global naming — find next index across ALL spaces */
+  const start=N.nextStart(spaces,prefix);
+  const labels=N.generate(prefix,start,total,dir);
+
+  const ci=grp.ci;
+  const uvGrids=G.splitUvGrid(cols,rows,gapPct);
+
+  uvGrids.forEach((uvq,i)=>{
+    spaces.push({spaceId:uuid(),groupId:pendingGroupId,label:labels[i],uvQuad:uvq,order:i+1,ci});
+  });
+
+  /* lock prefix on group */
+  grp.prefix=prefix;
+
+  document.getElementById('btn-split').disabled=true;
+  document.getElementById('b2').classList.remove('on');
+  document.getElementById('c2').classList.remove('hl');
+  document.getElementById('b3').classList.add('on');
+  document.getElementById('c3').classList.add('hl');
+  setTimeout(()=>{
+    document.getElementById('b3').classList.remove('on');
+    document.getElementById('c3').classList.remove('hl');
+  },2500);
+
+  pendingGroupId=null;
+  selected=null;
+  redraw(); refreshList();
+  toast('Generated '+total+' spaces ('+labels[0]+'–'+labels[total-1]+'). Drag to fine-tune.','ok');
+}
+
+/* ================================================================
+   RENDER
+================================================================ */
+function redraw(){
+  layer.find('._z').forEach(n=>n.destroy());
+  hLayer.destroyChildren();
+
+  /* Draw-mode preview */
+  if(mode===DRAW){
+    drawPts.forEach((p,i)=>{
+      layer.add(new Konva.Circle({x:p.x,y:p.y,radius:i===0?7:5,
+        fill:i===0?'#f97316':'#fff',stroke:'#f97316',strokeWidth:2,listening:false,name:'_z'}));
+      if(i>0){
+        const pv=drawPts[i-1];
+        layer.add(new Konva.Line({points:[pv.x,pv.y,p.x,p.y],
+          stroke:'#f97316',strokeWidth:2,dash:[6,4],listening:false,name:'_z'}));
+      }
     });
+    if(drawPts.length>=3){
+      const last=drawPts[drawPts.length-1],first=drawPts[0];
+      layer.add(new Konva.Line({points:[last.x,last.y,first.x,first.y],
+        stroke:'rgba(249,115,22,.35)',strokeWidth:1.5,dash:[4,8],listening:false,name:'_z'}));
+    }
   }
 
-  /* ================================================================
-     BACKGROUND
-  ================================================================ */
-  function loadBg(){
-    fetch(`/api/v1/cameras/${CAM}/snapshot-latest`)
-      .then(r=>r.ok?r.blob():null)
-      .then(blob=>{
-        if(!blob){noBg();return;}
-        const url=URL.createObjectURL(blob);
-        const img=new window.Image();
-        img.onload=()=>{
-          const box=document.querySelector('.canvas-body');
-          const maxW=box.clientWidth-4, maxH=box.clientHeight-4;
-          const scale=Math.min(maxW/img.width,maxH/img.height,1);
-          SW=Math.round(img.width*scale); SH=Math.round(img.height*scale);
-          initKonva(SW,SH);
-          Konva.Image.fromURL(url,ki=>{
-            ki.setAttrs({x:0,y:0,width:SW,height:SH,listening:false});
-            layer.add(ki); layer.batchDraw();
-          });
-          loadExisting();
-        };
-        img.src=url;
-      })
-      .catch(()=>noBg());
-  }
-  function noBg(){
-    const box=document.querySelector('.canvas-body');
-    SW=box.clientWidth-4; SH=box.clientHeight-4;
-    initKonva(SW,SH);
-    layer.add(new Konva.Text({
-      x:SW/2,y:SH/2,text:'No snapshot available\nUpload via FTP first',
-      fontSize:16,fill:'#94a3b8',align:'center',offsetX:160,listening:false,
+  /* Render groups (parent outlines — only if they have no spaces or are selected) */
+  groups.forEach(grp=>{
+    const hasSpaces=spaces.some(s=>s.groupId===grp.groupId);
+    const isSel=selected&&selected.type==='group'&&selected.id===grp.groupId;
+    if(!isSel&&hasSpaces) return; // hide parent when spaces are drawn on top
+    const c=PAL[grp.ci%PAL.length];
+    const pts=qToS(grp.quad).flatMap(p=>[p.x,p.y]);
+    layer.add(new Konva.Line({
+      points:pts,closed:true,
+      fill:isSel?'rgba(249,115,22,.12)':'rgba(249,115,22,.06)',
+      stroke:isSel?'#f97316':'rgba(249,115,22,.4)',
+      strokeWidth:isSel?2:1.2,dash:[8,5],
+      _zid:grp.groupId,_ztype:'group',name:'_z',listening:true,
     }));
-    layer.batchDraw();
-    loadExisting();
-  }
-
-  /* ================================================================
-     COORD HELPERS
-  ================================================================ */
-  const sn=(sx,sy)=>({x:sx/SW,y:sy/SH});
-  const ns=(p)=>({x:p.x*SW,y:p.y*SH});
-  const qFlat=(q)=>q.flatMap(p=>[p.x*SW,p.y*SH]);
-
-  /* ================================================================
-     DRAW MODE
-  ================================================================ */
-  function startDraw(){
-    if(mode===MODE.DRAW) return;
-    cancelDraw(false);
-    mode=MODE.DRAW; drawPoints=[];
-    deselect();
-    document.getElementById('btn-draw').classList.add('active');
-    document.getElementById('btn-cancel').style.display='';
-    document.getElementById('b1').classList.add('on');
-    document.getElementById('c1').classList.add('hl');
-    setFooter('DRAW MODE &mdash; click 4 corner points of the parking area (any corner order)',true);
-    updDrawStatus();
-    stage.container().style.cursor='crosshair';
-  }
-
-  function cancelDraw(rm=true){
-    drawPoints=[];
-    if(rm) mode=MODE.IDLE;
-    document.getElementById('btn-draw').classList.remove('active');
-    document.getElementById('btn-cancel').style.display='none';
-    document.getElementById('b1').classList.remove('on');
-    document.getElementById('c1').classList.remove('hl');
-    setFooter('Click <b>Draw Area (4 pts)</b> to start.',false);
-    updDrawStatus(); redrawAll();
-    stage.container().style.cursor='';
-  }
-
-  function updDrawStatus(){
-    const el=document.getElementById('draw-pts-status');
-    if(mode===MODE.DRAW){
-      el.className='draw-pts show';
-      el.textContent=drawPoints.length+' / 4 points placed'+(drawPoints.length>0?' — click next corner':'');
-    } else { el.className='draw-pts'; }
-  }
-
-  /* ================================================================
-     STAGE EVENTS
-  ================================================================ */
-  function getPos(){ return stage.getPointerPosition()||{x:0,y:0}; }
-
-  function onDown(e){
-    const pos=getPos();
-
-    if(mode===MODE.DRAW){
-      drawPoints.push({x:pos.x,y:pos.y});
-      updDrawStatus();
-      if(drawPoints.length===4) finishDraw();
-      else redrawAll();
-      return;
-    }
-
-    const shape=e.target;
-    if(shape&&shape!==stage){
-      const zid=shape.getAttr('_zid');
-      const htype=shape.getAttr('_htype');
-      const hidx=shape.getAttr('_hidx');
-      if(zid){
-        if(selectedId!==zid){selectedId=zid; redrawAll();}
-        const z=zones.find(z=>z.id===zid);
-        if(htype==='corner'){
-          dragging={type:'corner',zoneId:zid,idx:hidx,origQuad:z.quad.map(p=>({...p})),sx:pos.x,sy:pos.y};
-          stage.container().style.cursor='grabbing'; return;
-        }
-        if(htype==='midpoint'){
-          dragging={type:'midpoint',zoneId:zid,idx:hidx,origQuad:z.quad.map(p=>({...p})),sx:pos.x,sy:pos.y};
-          stage.container().style.cursor='grabbing'; return;
-        }
-        if(htype==='body'){
-          dragging={type:'body',zoneId:zid,origQuad:z.quad.map(p=>({...p})),sx:pos.x,sy:pos.y};
-          stage.container().style.cursor='move'; return;
-        }
-      }
-    }
-    deselect();
-  }
-
-  function onMove(e){
-    if(!dragging) return;
-    const pos=getPos();
-    const dx=(pos.x-dragging.sx)/SW, dy=(pos.y-dragging.sy)/SH;
-    const z=zones.find(z=>z.id===dragging.zoneId);
-    if(!z) return;
-
-    if(dragging.type==='corner'){
-      const q=dragging.origQuad.map(p=>({...p}));
-      q[dragging.idx]=G.clamp({x:q[dragging.idx].x+dx,y:q[dragging.idx].y+dy});
-      z.quad=q;
-    } else if(dragging.type==='midpoint'){
-      // edge vertex pairs: top(0,1) right(1,2) bottom(2,3) left(3,0)
-      const em=[[0,1],[1,2],[2,3],[3,0]];
-      const q=dragging.origQuad.map(p=>({...p}));
-      const [ia,ib]=em[dragging.idx];
-      q[ia]=G.clamp({x:q[ia].x+dx,y:q[ia].y+dy});
-      q[ib]=G.clamp({x:q[ib].x+dx,y:q[ib].y+dy});
-      z.quad=q;
-    } else if(dragging.type==='body'){
-      z.quad=G.translateQuad(dragging.origQuad,dx,dy);
-    }
-    redrawAll();
-  }
-
-  function onUp(){
-    if(dragging){ dragging=null; stage.container().style.cursor=''; refreshList(); }
-  }
-
-  /* ================================================================
-     FINISH DRAW
-  ================================================================ */
-  function finishDraw(){
-    const normPts=drawPoints.map(p=>sn(p.x,p.y));
-    const ordered=G.orderQuad(normPts);
-    if(!G.isConvexQuad(ordered)) toast('Quad may not be convex — adjust handles after split.','err');
-    const id='AREA_'+Date.now();
-    const ci=palIdx++%PAL.length;
-    zones.push({id,quad:ordered,type:'area',ci});
-    areaZoneId=id; selectedId=id;
-    document.getElementById('btn-split').disabled=false;
-    document.getElementById('b2').classList.add('on');
-    document.getElementById('c2').classList.add('hl');
-    cancelDraw(true);
-    mode=MODE.EDIT;
-    redrawAll(); refreshList();
-    toast('Area defined \u2014 now set spaces and click Split.','ok');
-  }
-
-  /* ================================================================
-     SPLIT
-  ================================================================ */
-  function splitArea(){
-    const areaZone=zones.find(z=>z.id===areaZoneId);
-    if(!areaZone){toast('Draw an area first','err');return;}
-    const cols=Math.max(1,parseInt(document.getElementById('inp-spaces').value)||5);
-    const rows=Math.max(1,parseInt(document.getElementById('inp-rows').value)||1);
-    const prefix=document.getElementById('inp-prefix').value||'A';
-    const start=Math.max(1,parseInt(document.getElementById('inp-start').value)||1);
-    const dir=document.getElementById('inp-dir').value;
-    const gapPct=parseFloat(document.getElementById('inp-gap').value)||2;
-    const total=cols*rows;
-    const ids=genIds(prefix,start,total,dir);
-
-    // Remove area zone, keep other zones
-    const savedAreaQuad=areaZone.quad;
-    zones=zones.filter(z=>z.id!==areaZoneId);
-    areaZoneId=null;
-
-    const ci=palIdx++%PAL.length;
-    G.splitQuad(savedAreaQuad,cols,rows,gapPct).forEach((quad,i)=>{
-      zones.push({id:ids[i],quad,type:'space',ci,order:i+1});
-    });
-
-    document.getElementById('btn-split').disabled=true;
-    document.getElementById('b2').classList.remove('on');
-    document.getElementById('c2').classList.remove('hl');
-    document.getElementById('b3').classList.add('on');
-    document.getElementById('c3').classList.add('hl');
-    setTimeout(()=>{
-      document.getElementById('b3').classList.remove('on');
-      document.getElementById('c3').classList.remove('hl');
-    },2500);
-
-    selectedId=null; redrawAll(); refreshList();
-    toast('Generated '+total+' perspective-correct spaces. Drag handles to align with painted lines.','ok');
-  }
-
-  /* ================================================================
-     RENDER
-  ================================================================ */
-  function redrawAll(){
-    layer.find('._zone').forEach(n=>n.destroy());
-    handleLayer.destroyChildren();
-
-    // Draw-mode preview
-    if(mode===MODE.DRAW){
-      drawPoints.forEach((p,i)=>{
-        layer.add(new Konva.Circle({x:p.x,y:p.y,radius:i===0?7:5,
-          fill:i===0?'#f97316':'#fff',stroke:'#f97316',strokeWidth:2,listening:false,name:'_zone'}));
-        if(i>0){
-          const prev=drawPoints[i-1];
-          layer.add(new Konva.Line({points:[prev.x,prev.y,p.x,p.y],
-            stroke:'#f97316',strokeWidth:2,dash:[6,4],listening:false,name:'_zone'}));
-        }
-      });
-      // Preview close line if 3+ points
-      if(drawPoints.length>=3){
-        const last=drawPoints[drawPoints.length-1], first=drawPoints[0];
-        layer.add(new Konva.Line({points:[last.x,last.y,first.x,first.y],
-          stroke:'rgba(249,115,22,.4)',strokeWidth:1.5,dash:[4,6],listening:false,name:'_zone'}));
-      }
-    }
-
-    zones.forEach(z=>renderZone(z));
-    layer.batchDraw();
-    handleLayer.batchDraw();
-  }
-
-  function renderZone(z){
-    const c=PAL[z.ci%PAL.length];
-    const pts=qFlat(z.quad);
-    const isSel=z.id===selectedId;
-
-    // Body polygon — hit area for selection + translate drag
-    const poly=new Konva.Line({
-      points:pts, closed:true,
-      fill:isSel?c.fill.replace('.22','.40'):c.fill,
-      stroke:isSel?'#ffffff':c.stroke,
-      strokeWidth:isSel?2.5:1.8,
-      _zid:z.id, _htype:'body', name:'_zone', listening:true,
-    });
-    layer.add(poly);
-
-    // Label at centroid
-    const sc=z.quad.map(p=>ns(p));
-    const cx=sc.reduce((s,p)=>s+p.x,0)/4;
-    const cy=sc.reduce((s,p)=>s+p.y,0)/4;
-    const lbl=new Konva.Text({
-      x:cx,y:cy,text:z.id,fontSize:Math.max(10,Math.min(14,SW/80)),
-      fill:'#fff',fontStyle:'bold',align:'center',
-      shadowColor:'rgba(0,0,0,.9)',shadowBlur:3,shadowOffsetX:1,shadowOffsetY:1,
-      listening:false,name:'_zone',
-    });
+    const sc=qToS(grp.quad);
+    const cx=sc.reduce((s,p)=>s+p.x,0)/4, cy=sc.reduce((s,p)=>s+p.y,0)/4;
+    const lbl=new Konva.Text({x:cx,y:cy,
+      text:'[Area '+(isSel?'selected':'group')+']',
+      fontSize:11,fill:'rgba(249,115,22,.8)',align:'center',
+      listening:false,name:'_z'});
     lbl.offsetX(lbl.width()/2); lbl.offsetY(lbl.height()/2);
     layer.add(lbl);
+  });
 
-    if(isSel){
-      // Corner handles (orange)
-      sc.forEach((p,i)=>{
-        handleLayer.add(new Konva.Circle({
-          x:p.x,y:p.y,radius:8,
-          fill:'#f97316',stroke:'#fff',strokeWidth:2,
-          _zid:z.id,_htype:'corner',_hidx:i,
-        }));
-      });
-      // Midpoint handles (blue)
-      G.midpoints(z.quad).map(p=>ns(p)).forEach((p,i)=>{
-        handleLayer.add(new Konva.Circle({
-          x:p.x,y:p.y,radius:6,
-          fill:'#3b82f6',stroke:'#fff',strokeWidth:1.5,
-          _zid:z.id,_htype:'midpoint',_hidx:i,
-        }));
-      });
-    }
-  }
-
-  /* ================================================================
-     SELECTION / ACTIONS
-  ================================================================ */
-  function deselect(){ selectedId=null; redrawAll(); refreshList(); }
-
-  function deleteSelected(){
-    if(!selectedId){toast('Select a zone first','err');return;}
-    const id=selectedId;
-    zones=zones.filter(z=>z.id!==id);
-    if(areaZoneId===id){areaZoneId=null;document.getElementById('btn-split').disabled=true;}
-    selectedId=null; redrawAll(); refreshList();
-  }
-
-  function duplicateSelected(){
-    if(!selectedId){toast('Select a zone first','err');return;}
-    const z=zones.find(z=>z.id===selectedId);
-    if(!z) return;
-    const nid=nextId(z.id);
-    const offset=0.015;
-    zones.push({...z,id:nid,quad:z.quad.map(p=>G.clamp({x:p.x+offset,y:p.y+offset}))});
-    selectedId=nid; redrawAll(); refreshList();
-    toast('Duplicated \u2192 '+nid,'ok');
-  }
-
-  function nextId(orig){
-    const m=orig.match(/^([A-Za-z_]*)(\d+)$/);
-    if(!m) return orig+'_2';
-    let n=parseInt(m[2])+1;
-    let id=m[1]+String(n).padStart(m[2].length,'0');
-    while(zones.find(z=>z.id===id)){n++;id=m[1]+String(n).padStart(m[2].length,'0');}
-    return id;
-  }
-
-  function clearAll(){
-    if(zones.length&&!confirm('Clear all '+zones.length+' zones?')) return;
-    zones=[]; areaZoneId=null; selectedId=null;
-    document.getElementById('btn-split').disabled=true;
-    cancelDraw(true); redrawAll(); refreshList();
-  }
-
-  /* ================================================================
-     ZONE LIST
-  ================================================================ */
-  function refreshList(){
-    const el=document.getElementById('zlist');
-    document.getElementById('zcnt').textContent=zones.length;
-    if(!zones.length){
-      el.innerHTML='<div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div>'; return;
-    }
-    el.innerHTML=zones.map(z=>{
-      const isSel=z.id===selectedId;
-      return `<div class="z-item${isSel?' sel':''}" onclick="selectZone('${z.id}')">
-        <div><span class="nm">${z.id}</span> <span class="mt">${z.type}</span></div>
-        <button class="del" onclick="event.stopPropagation();rmZone('${z.id}')">&times;</button>
-      </div>`;
-    }).join('');
-  }
-  function selectZone(id){
-    selectedId=id; redrawAll(); refreshList();
-    document.querySelectorAll('.z-item').forEach(el=>{
-      if(el.querySelector('.nm')?.textContent===id) el.scrollIntoView({block:'nearest'});
-    });
-  }
-  function rmZone(id){
-    zones=zones.filter(z=>z.id!==id);
-    if(areaZoneId===id){areaZoneId=null;document.getElementById('btn-split').disabled=true;}
-    if(selectedId===id) selectedId=null;
-    redrawAll(); refreshList();
-  }
-
-  /* ================================================================
-     SAVE / LOAD
-  ================================================================ */
-  async function saveZones(clearExisting){
-    const toSave=zones.filter(z=>z.type==='space'||z.type==='area');
-    if(!toSave.length){toast('No zones to save','err');return;}
-    if(clearExisting&&!confirm('Delete ALL existing zones for this camera and replace?')) return;
-    const payload=toSave.map(z=>({
-      zone_id:z.id, name:z.id, capacity_units:1,
-      // Store full quad as 4 percentage-coord points — resolution independent
-      polygon_json:JSON.stringify(z.quad.map(p=>[+(p.x*100).toFixed(4),+(p.y*100).toFixed(4)])),
+  /* Render spaces */
+  spaces.forEach(sp=>{
+    const grp=groups.find(g=>g.groupId===sp.groupId);
+    if(!grp) return;
+    const imgQuad=G.uvQuadToImage(grp.quad,sp.uvQuad);
+    const isSel=selected&&selected.type==='space'&&selected.id===sp.spaceId;
+    const c=PAL[sp.ci%PAL.length];
+    const pts=qToS(imgQuad).flatMap(p=>[p.x,p.y]);
+    layer.add(new Konva.Line({
+      points:pts,closed:true,
+      fill:isSel?c.fill.replace('.20','.40'):c.fill,
+      stroke:isSel?'#fff':c.stroke,
+      strokeWidth:isSel?2.5:1.5,
+      _zid:sp.spaceId,_ztype:'space',name:'_z',listening:true,
     }));
-    try{
-      const r=await fetch('/admin/zones/bulk',{
-        method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({camera_id:CAM,zones:payload,clear_existing:clearExisting}),
-      });
-      const d=await r.json();
-      if(!r.ok){toast(d.error||'Save failed','err');return;}
-      toast('Saved '+d.saved+' zones \u2713','ok');
-    }catch(e){toast('Network error: '+e.message,'err');}
-  }
+    const sc2=qToS(imgQuad);
+    const cx=sc2.reduce((s,p)=>s+p.x,0)/4, cy=sc2.reduce((s,p)=>s+p.y,0)/4;
+    const lbl=new Konva.Text({x:cx,y:cy,text:sp.label,
+      fontSize:Math.max(10,Math.min(14,SW/80)),
+      fill:'#fff',fontStyle:'bold',align:'center',
+      shadowColor:'rgba(0,0,0,.9)',shadowBlur:3,shadowOffsetX:1,shadowOffsetY:1,
+      listening:false,name:'_z'});
+    lbl.offsetX(lbl.width()/2); lbl.offsetY(lbl.height()/2);
+    layer.add(lbl);
+  });
 
-  async function loadExisting(){
-    try{
-      const r=await fetch('/admin/zones.json?camera_id='+CAM);
-      const d=await r.json();
-      if(!d.zones?.length) return;
-      d.zones.forEach((z,i)=>{
-        try{
-          const pts=JSON.parse(z.polygon_json||'[]');
-          if(!pts.length) return;
-          let quad;
-          if(pts.length>=4){
-            quad=pts.slice(0,4).map(p=>({x:p[0]/100,y:p[1]/100}));
-          } else {
-            // legacy bounding box [[x1,y1],[x2,y1],[x2,y2],[x1,y2]]
-            quad=pts.map(p=>({x:p[0]/100,y:p[1]/100}));
-            while(quad.length<4) quad.push({...quad[quad.length-1]});
-          }
-          zones.push({id:z.zone_id,quad,type:'space',ci:i%PAL.length});
-        }catch(e){}
-      });
-      redrawAll(); refreshList();
-      if(d.zones.length) toast('Loaded '+d.zones.length+' existing zones','ok');
-    }catch(e){}
-  }
+  layer.batchDraw(); hLayer.batchDraw();
+}
 
-  /* ================================================================
-     UI HELPERS
-  ================================================================ */
-  function setFooter(html,active){
-    const el=document.getElementById('footer');
-    el.innerHTML=html;
-    el.className='canvas-footer'+(active?' active':'');
+/* ================================================================
+   SELECTION / ACTIONS
+================================================================ */
+function deselect(){ selected=null; redraw(); refreshList(); }
+
+function deleteSelected(){
+  if(!selected){toast('Select a zone first','err');return;}
+  if(selected.type==='group'){
+    groups=groups.filter(g=>g.groupId!==selected.id);
+    spaces=spaces.filter(s=>s.groupId!==selected.id);
+    if(pendingGroupId===selected.id){ pendingGroupId=null; document.getElementById('btn-split').disabled=true; }
+  } else {
+    spaces=spaces.filter(s=>s.spaceId!==selected.id);
   }
-  function toast(msg,type){
-    document.querySelectorAll('.toast').forEach(t=>t.remove());
-    const t=document.createElement('div');
-    t.className='toast toast-'+type; t.textContent=msg;
-    document.body.appendChild(t); setTimeout(()=>t.remove(),3500);
+  selected=null; redraw(); refreshList();
+}
+
+function duplicateSelected(){
+  if(!selected){toast('Select a zone first','err');return;}
+  if(selected.type==='space'){
+    const sp=spaces.find(s=>s.spaceId===selected.id);
+    if(!sp) return;
+    const grp=groups.find(g=>g.groupId===sp.groupId);
+    if(!grp) return;
+    const newLabel=N.format(grp.prefix,N.nextStart(spaces,grp.prefix));
+    const off=0.02;
+    const newUvq=sp.uvQuad.map(uv=>G.clampUV({u:uv.u+off,v:uv.v+off}));
+    const newSp={spaceId:uuid(),groupId:sp.groupId,label:newLabel,uvQuad:newUvq,order:spaces.length+1,ci:sp.ci};
+    spaces.push(newSp);
+    selected={type:'space',id:newSp.spaceId};
+    redraw(); refreshList();
+    toast('Duplicated → '+newLabel,'ok');
+  } else {
+    toast('Select a space to duplicate (not the area group)','err');
   }
-  </script>
+}
+
+function clearAll(){
+  if((groups.length||spaces.length)&&!confirm('Clear ALL zones?')) return;
+  groups=[]; spaces=[]; selected=null; pendingGroupId=null;
+  document.getElementById('btn-split').disabled=true;
+  cancelDraw(true); redraw(); refreshList();
+}
+
+/* ================================================================
+   ZONE LIST
+================================================================ */
+function refreshList(){
+  const el=document.getElementById('zlist');
+  document.getElementById('gcnt').textContent=groups.length;
+  document.getElementById('scnt').textContent=spaces.length;
+  const items=[];
+  groups.forEach(grp=>{
+    const isSel=selected&&selected.type==='group'&&selected.id===grp.groupId;
+    items.push(`<div class="z-item${isSel?' sel':''}" onclick="selById('group','${grp.groupId}')">
+      <div><span class="nm">Area</span><span class="mt">${spaces.filter(s=>s.groupId===grp.groupId).length} spaces</span></div>
+      <button class="del" onclick="event.stopPropagation();delById('group','${grp.groupId}')">&times;</button></div>`);
+    spaces.filter(s=>s.groupId===grp.groupId).forEach(sp=>{
+      const isSel2=selected&&selected.type==='space'&&selected.id===sp.spaceId;
+      items.push(`<div class="z-item${isSel2?' sel':''}" style="padding-left:20px" onclick="selById('space','${sp.spaceId}')">
+        <div><span class="nm">${sp.label}</span><span class="mt">space</span></div>
+        <button class="del" onclick="event.stopPropagation();delById('space','${sp.spaceId}')">&times;</button></div>`);
+    });
+  });
+  el.innerHTML=items.length?items.join(''):'<div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div>';
+}
+
+function selById(type,id){
+  selected={type,id:id}; redraw(); refreshList();
+  document.querySelectorAll('.z-item').forEach(el=>el.scrollIntoView&&el.classList.contains('sel')&&el.scrollIntoView({block:'nearest'}));
+}
+function delById(type,id){
+  if(type==='group'){ groups=groups.filter(g=>g.groupId!==id); spaces=spaces.filter(s=>s.groupId!==id); }
+  else { spaces=spaces.filter(s=>s.spaceId!==id); }
+  if(selected&&selected.id===id) selected=null;
+  redraw(); refreshList();
+}
+
+/* ================================================================
+   SAVE / LOAD
+================================================================ */
+async function saveZones(clearExisting){
+  const toSave=spaces;
+  if(!toSave.length){toast('No spaces to save','err');return;}
+  if(clearExisting&&!confirm('Delete ALL existing zones for this camera?')) return;
+
+  /* Build payload: each space stored as 4-point polygon in % coords */
+  const payload=toSave.map(sp=>{
+    const grp=groups.find(g=>g.groupId===sp.groupId);
+    let pts;
+    if(grp){
+      pts=G.uvQuadToImage(grp.quad,sp.uvQuad).map(p=>[+(p.x*100).toFixed(4),+(p.y*100).toFixed(4)]);
+    } else {
+      pts=[[0,0],[100,0],[100,100],[0,100]];
+    }
+    return {zone_id:sp.label, name:sp.label, capacity_units:1, polygon_json:JSON.stringify(pts)};
+  });
+
+  try{
+    const r=await fetch('/admin/zones/bulk',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({camera_id:CAM,zones:payload,clear_existing:clearExisting}),
+    });
+    const d=await r.json();
+    if(!r.ok){toast(d.error||'Save failed','err');return;}
+    toast('Saved '+d.saved+' zones ✓','ok');
+  }catch(e){toast('Network error: '+e.message,'err');}
+}
+
+async function loadExisting(){
+  try{
+    const r=await fetch('/admin/zones.json?camera_id='+CAM);
+    const d=await r.json();
+    if(!d.zones?.length) return;
+    const gid=uuid();
+    const ci=palIdx++%PAL.length;
+    /* Create a synthetic group covering the full image */
+    const syntheticQuad=[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+    groups.push({groupId:gid,quad:syntheticQuad,prefix:'X',ci,createdAt:Date.now()});
+    d.zones.forEach((z,i)=>{
+      try{
+        const pts=JSON.parse(z.polygon_json||'[]');
+        if(pts.length<3) return;
+        const quad=pts.slice(0,4).map(p=>({x:p[0]/100,y:p[1]/100}));
+        while(quad.length<4) quad.push({...quad[quad.length-1]});
+        /* Convert image-space quad to UV within synthetic (full-frame) group */
+        const uvq=quad.map(p=>G.imageToUv(syntheticQuad,p));
+        spaces.push({spaceId:uuid(),groupId:gid,label:z.zone_id,uvQuad:uvq,order:i+1,ci:i%PAL.length});
+      }catch(_){}
+    });
+    redraw(); refreshList();
+    toast('Loaded '+d.zones.length+' existing zones','ok');
+  }catch(_){}
+}
+
+/* ================================================================
+   UI HELPERS
+================================================================ */
+function setFooter(html,active){
+  const el=document.getElementById('footer');
+  el.innerHTML=html;
+  el.className='canvas-footer'+(active?' active':'');
+}
+function toast(msg,type){
+  document.querySelectorAll('.toast').forEach(t=>t.remove());
+  const t=document.createElement('div');
+  t.className='toast toast-'+type; t.textContent=msg;
+  document.body.appendChild(t); setTimeout(()=>t.remove(),3500);
+}
+</script>
 </body>
 </html>
