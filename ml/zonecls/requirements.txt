@@ -1,0 +1,7 @@
+torch==2.1.2
+torchvision==0.16.2
+PyYAML==6.0.1
+Pillow==10.2.0
+numpy==1.26.4
+tqdm==4.66.1
+onnx==1.15.0

@@ -1,0 +1,65 @@
+/1000/incoming/:
+total 84
+drwxr-sr-x    4 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 08:35 ..
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 7B02945PAG901B4
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 FTP_TEST
+-rw-r--r--    1 cam001   cam001       65700 Feb  5 08:34 test_upload_1770280126.jpg
+
+/1000/incoming/7B02945PAG901B4:
+total 12
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    4 cam001   cam001        4096 Feb  5 09:12 ..
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 2000-01-02
+
+/1000/incoming/7B02945PAG901B4/2000-01-02:
+total 12
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 ..
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 001
+
+/1000/incoming/7B02945PAG901B4/2000-01-02/001:
+total 12
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 ..
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 jpg
+
+/1000/incoming/7B02945PAG901B4/2000-01-02/001/jpg:
+total 12
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 ..
+drwxr-sr-x    5 cam001   cam001        4096 Feb  5 09:13 02
+
+/1000/incoming/7B02945PAG901B4/2000-01-02/001/jpg/02:
+total 20
+drwxr-sr-x    5 cam001   cam001        4096 Feb  5 09:13 .
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 ..
+drwxr-sr-x    2 cam001   cam001        4096 Feb  5 09:12 27
+drwxr-sr-x    2 cam001   cam001        4096 Feb  5 09:12 28
+drwxr-sr-x    2 cam001   cam001        4096 Feb  5 09:13 29
+
+/1000/incoming/7B02945PAG901B4/2000-01-02/001/jpg/02/27:
+total 8
+drwxr-sr-x    2 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    5 cam001   cam001        4096 Feb  5 09:13 ..
+
+/1000/incoming/7B02945PAG901B4/2000-01-02/001/jpg/02/28:
+total 8
+drwxr-sr-x    2 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    5 cam001   cam001        4096 Feb  5 09:13 ..
+
+/1000/incoming/7B02945PAG901B4/2000-01-02/001/jpg/02/29:
+total 8
+drwxr-sr-x    2 cam001   cam001        4096 Feb  5 09:13 .
+drwxr-sr-x    5 cam001   cam001        4096 Feb  5 09:13 ..
+
+/1000/incoming/FTP_TEST:
+total 12
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    4 cam001   cam001        4096 Feb  5 09:12 ..
+drwxr-sr-x    2 cam001   cam001        4096 Feb  5 09:12 946780072_43042510110
+
+/1000/incoming/FTP_TEST/946780072_43042510110:
+total 8
+drwxr-sr-x    2 cam001   cam001        4096 Feb  5 09:12 .
+drwxr-sr-x    3 cam001   cam001        4096 Feb  5 09:12 ..

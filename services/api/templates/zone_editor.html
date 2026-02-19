@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CamPark - Zone Editor</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --bg-hover: #334155;
+      --text-primary: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --accent-blue: #3b82f6;
+      --status-green: #22c55e;
+      --status-yellow: #eab308;
+      --status-red: #ef4444;
+      --border-color: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text-primary);
+      min-height: 100vh;
+    }
+    .navbar {
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border-color);
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .navbar h1 { font-size: 20px; font-weight: 600; }
+    .nav-links { display: flex; gap: 8px; }
+    .nav-links a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .nav-links a:hover, .nav-links a.active {
+      background: var(--bg-hover);
+      color: var(--text-primary);
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    .page-header h2 { font-size: 24px; font-weight: 600; }
+    .page-header .sub { font-size: 14px; color: var(--text-secondary); margin-top: 4px; }
+    
+    .editor-layout {
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 24px;
+    }
+    @media (max-width: 1000px) {
+      .editor-layout { grid-template-columns: 1fr; }
+    }
+    
+    .canvas-container {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .canvas-toolbar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .canvas-toolbar .tbtn {
+      padding: 6px 14px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-hover);
+      color: var(--text-primary);
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .canvas-toolbar .tbtn:hover {
+      background: var(--accent-blue);
+      border-color: var(--accent-blue);
+    }
+    .canvas-toolbar .tbtn.danger:hover {
+      background: var(--status-red);
+      border-color: var(--status-red);
+    }
+    .canvas-wrapper {
+      position: relative;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    #canvas { display: block; }
+    .canvas-hint {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 8px;
+    }
+    
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 20px;
+    }
+    .panel-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border-color);
+    }
+    
+    .form-row {
+      display: flex;
+      gap: 12px;
+    }
+    .form-group {
+      margin-bottom: 14px;
+      flex: 1;
+    }
+    .form-group:last-child { margin-bottom: 0; }
+    .form-group label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      text-transform: uppercase;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 10px 12px;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 14px;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: var(--accent-blue);
+    }
+    
+    .btn {
+      width: 100%;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      margin-bottom: 8px;
+      transition: all 0.2s;
+    }
+    .btn:last-child { margin-bottom: 0; }
+    .btn-primary { background: var(--accent-blue); color: white; }
+    .btn-primary:hover { opacity: 0.9; }
+    .btn-success { background: var(--status-green); color: white; }
+    .btn-success:hover { opacity: 0.9; }
+    .btn-secondary { background: var(--bg-hover); color: var(--text-primary); }
+    .btn-danger { background: var(--status-red); color: white; }
+    .btn-danger:hover { opacity: 0.9; }
+    
+    .zone-list {
+      max-height: 260px;
+      overflow-y: auto;
+    }
+    .zone-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 12px;
+      background: var(--bg-dark);
+      border-radius: 6px;
+      margin-bottom: 6px;
+      font-size: 13px;
+      cursor: pointer;
+      transition: background 0.2s;
+      border: 1px solid transparent;
+    }
+    .zone-item:hover { background: var(--bg-hover); }
+    .zone-item.selected { border-color: var(--accent-blue); }
+    .zone-item:last-child { margin-bottom: 0; }
+    .zone-item .name { font-weight: 500; }
+    .zone-item .meta { color: var(--text-secondary); font-size: 11px; }
+    .zone-item .delete-btn {
+      background: none;
+      border: none;
+      color: var(--status-red);
+      cursor: pointer;
+      font-size: 18px;
+      padding: 0 4px;
+    }
+    .zone-item .delete-btn:hover { opacity: 0.7; }
+    
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      padding: 14px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      z-index: 1000;
+      animation: slideIn 0.3s ease;
+    }
+    .toast-success { background: var(--status-green); color: white; }
+    .toast-error { background: var(--status-red); color: white; }
+    @keyframes slideIn {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .instructions {
+      font-size: 13px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+    }
+    .instructions ol { margin-left: 20px; }
+    .instructions li { margin-bottom: 6px; }
+    .instructions strong { color: var(--text-primary); }
+    
+    .count-display {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+    .count-display strong { color: var(--accent-blue); }
+  </style>
+</head>
+<body>
+  <nav class="navbar">
+    <h1>CamPark</h1>
+    <div class="nav-links">
+      <a href="/admin/dashboard">Dashboard</a>
+      <a href="/admin/cameras">Cameras</a>
+      <a href="/admin/zones" class="active">Zones</a>
+      <a href="/admin/events">Events</a>
+      <a href="/admin/tokens">Tokens</a>
+      <a href="/admin/integrations">Integrations</a>
+      <a href="/admin/scada">SCADA</a>
+      <a href="/admin/system">System</a>
+      <a href="/logout" style="color:#ef4444">Logout</a>
+    </div>
+  </nav>
+
+  <div class="container">
+    <div class="page-header">
+      <div>
+        <h2>Zone Editor</h2>
+        <div class="sub">Camera: <strong>{{ camera_id }}</strong> &mdash; Generate grid, then fine-tune boxes</div>
+      </div>
+    </div>
+    
+    <div class="editor-layout">
+      <!-- Canvas Area -->
+      <div class="canvas-container">
+        <div class="canvas-toolbar">
+          <button class="tbtn" onclick="deleteSelected()" title="Delete selected box">&#128465; Delete Selected</button>
+          <button class="tbtn" onclick="duplicateSelected()" title="Duplicate selected box">&#128203; Duplicate</button>
+          <button class="tbtn danger" onclick="clearAllBoxes()" title="Clear all boxes from canvas">&#128465; Clear All</button>
+        </div>
+        <div class="canvas-wrapper">
+          <canvas id="canvas" width="960" height="540"></canvas>
+        </div>
+        <div class="canvas-hint">
+          Click a box to select. Drag to move. Drag corners to resize. Press <strong>Delete</strong> key to remove selected.
+        </div>
+      </div>
+      
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <!-- Generate Grid -->
+        <div class="panel">
+          <div class="panel-title">&#9632; Auto-Generate Grid</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Rows</label>
+              <input id="grid-rows" type="number" min="1" max="20" value="3">
+            </div>
+            <div class="form-group">
+              <label>Columns</label>
+              <input id="grid-cols" type="number" min="1" max="20" value="5">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Prefix</label>
+              <input id="grid-prefix" value="A" placeholder="A, B, P...">
+            </div>
+            <div class="form-group">
+              <label>Gap %</label>
+              <input id="grid-padding" type="number" min="0" max="20" value="2" title="Gap between boxes">
+            </div>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Naming Style</label>
+              <select id="grid-naming">
+                <option value="row-letter">A01, A02... B01, B02...</option>
+                <option value="sequential">P01, P02, P03...</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateGrid()">Generate Grid</button>
+          <div style="font-size:12px; color:var(--text-secondary); margin-top:6px;">
+            Generates all boxes at once. Drag &amp; resize to fit your parking spots.
+          </div>
+        </div>
+        
+        <!-- Add Single Box -->
+        <div class="panel">
+          <div class="panel-title">&#10010; Add Single Box</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>Zone ID</label>
+              <input id="single-zone-id" placeholder="e.g., X01">
+            </div>
+            <div class="form-group">
+              <label>Capacity</label>
+              <input id="single-capacity" type="number" min="1" value="1">
+            </div>
+          </div>
+          <button class="btn btn-secondary" onclick="addSingleBox()">Add Box</button>
+        </div>
+        
+        <!-- Zone List -->
+        <div class="panel">
+          <div class="panel-title">Zones on Canvas</div>
+          <div class="count-display">
+            Total: <strong id="zone-count">0</strong> zones
+          </div>
+          <div class="zone-list" id="zone-list">
+            <div style="color: var(--text-secondary); font-size: 13px;">No zones yet. Generate a grid above.</div>
+          </div>
+        </div>
+        
+        <!-- Save Actions -->
+        <div class="panel">
+          <div class="panel-title">&#128190; Save</div>
+          <button class="btn btn-success" onclick="saveAllZones(false)">Save All Zones</button>
+          <button class="btn btn-danger" onclick="saveAllZones(true)">Replace All (Clear + Save)</button>
+          <div style="font-size:12px; color:var(--text-secondary); margin-top:6px;">
+            <strong>Save All</strong> = update/add zones. <strong>Replace All</strong> = delete existing first, then save.
+          </div>
+        </div>
+        
+        <!-- Instructions -->
+        <div class="panel">
+          <div class="panel-title">How It Works</div>
+          <div class="instructions">
+            <ol>
+              <li>Set <strong>Rows &times; Columns</strong> and click <strong>Generate Grid</strong></li>
+              <li>All parking boxes appear on the image at once</li>
+              <li><strong>Drag</strong> boxes to correct positions</li>
+              <li><strong>Resize</strong> by dragging corners</li>
+              <li><strong>Delete</strong> unwanted boxes (select + Delete key)</li>
+              <li>Click <strong>Save All Zones</strong> when done</li>
+            </ol>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const cameraId = "{{ camera_id }}";
+    const CW = 960, CH = 540;
+    
+    const canvas = new fabric.Canvas('canvas', {
+      selection: true,
+      preserveObjectStacking: true
+    });
+    
+    // Zone color palette for rows
+    const COLORS = [
+      { fill: 'rgba(59,130,246,0.25)',  stroke: '#3b82f6' },
+      { fill: 'rgba(34,197,94,0.25)',   stroke: '#22c55e' },
+      { fill: 'rgba(234,179,8,0.25)',   stroke: '#eab308' },
+      { fill: 'rgba(168,85,247,0.25)',  stroke: '#a855f7' },
+      { fill: 'rgba(236,72,153,0.25)',  stroke: '#ec4899' },
+      { fill: 'rgba(249,115,22,0.25)',  stroke: '#f97316' },
+      { fill: 'rgba(20,184,166,0.25)',  stroke: '#14b8a6' },
+      { fill: 'rgba(239,68,68,0.25)',   stroke: '#ef4444' },
+    ];
+    
+    let zoneBoxes = []; // { rect, label, zoneId, capacity }
+    
+    // ---- Background Image ----
+    function loadBackground() {
+      fetch(`/api/v1/cameras/${cameraId}/snapshot-latest`)
+        .then(resp => resp.ok ? resp.blob() : null)
+        .then(blob => {
+          if (!blob) {
+            canvas.backgroundColor = '#1e293b';
+            const msg = new fabric.Text('No snapshot available\\nUpload an image via FTP first', {
+              left: CW/2, top: CH/2, fontSize: 20, fill: '#94a3b8',
+              textAlign: 'center', originX: 'center', originY: 'center',
+              selectable: false, evented: false
+            });
+            canvas.add(msg);
+            canvas.renderAll();
+            return;
+          }
+          const url = URL.createObjectURL(blob);
+          fabric.Image.fromURL(url, img => {
+            img.scaleToWidth(CW);
+            img.scaleToHeight(CH);
+            canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+          });
+        })
+        .catch(() => { canvas.backgroundColor = '#1e293b'; canvas.renderAll(); });
+    }
+    
+    // ---- Grid Generation ----
+    function generateGrid() {
+      const rows = parseInt(document.getElementById('grid-rows').value) || 3;
+      const cols = parseInt(document.getElementById('grid-cols').value) || 5;
+      const prefix = document.getElementById('grid-prefix').value || 'A';
+      const padding = parseFloat(document.getElementById('grid-padding').value) || 2;
+      const naming = document.getElementById('grid-naming').value;
+      
+      const padX = (padding / 100) * CW;
+      const padY = (padding / 100) * CH;
+      const boxW = (CW - padX * (cols + 1)) / cols;
+      const boxH = (CH - padY * (rows + 1)) / rows;
+      
+      let count = 0;
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          count++;
+          let zoneId;
+          if (naming === 'row-letter') {
+            const rowLetter = String.fromCharCode(65 + r);
+            zoneId = rowLetter + String(c + 1).padStart(2, '0');
+          } else {
+            zoneId = prefix + String(count).padStart(2, '0');
+          }
+          
+          const x = padX + c * (boxW + padX);
+          const y = padY + r * (boxH + padY);
+          addZoneBox(x, y, boxW, boxH, zoneId, 1, r % COLORS.length);
+        }
+      }
+      
+      updateZoneList();
+      showToast(`Generated ${count} zones`, 'success');
+    }
+    
+    // ---- Add Zone Box ----
+    function addZoneBox(x, y, w, h, zoneId, capacity, colorIdx) {
+      colorIdx = colorIdx || 0;
+      const color = COLORS[colorIdx % COLORS.length];
+      
+      const rect = new fabric.Rect({
+        left: x, top: y, width: w, height: h,
+        fill: color.fill, stroke: color.stroke, strokeWidth: 2,
+        rx: 4, ry: 4,
+        cornerColor: '#fff', cornerStrokeColor: color.stroke,
+        cornerSize: 8, transparentCorners: false,
+        hasRotatingPoint: false, lockRotation: true,
+        _zoneId: zoneId, _capacity: capacity, _colorIdx: colorIdx
+      });
+      
+      const label = new fabric.Text(zoneId, {
+        left: x + w/2, top: y + h/2,
+        fontSize: Math.min(14, Math.max(10, w/5)),
+        fill: '#fff', fontWeight: 'bold', textAlign: 'center',
+        originX: 'center', originY: 'center',
+        selectable: false, evented: false,
+        _isLabel: true, _parentZoneId: zoneId
+      });
+      
+      canvas.add(rect);
+      canvas.add(label);
+      zoneBoxes.push({ rect, label, zoneId, capacity });
+      
+      rect.on('moving',   () => syncLabel(rect, label));
+      rect.on('scaling',  () => syncLabel(rect, label));
+      rect.on('modified', () => { syncLabel(rect, label); updateZoneList(); });
+    }
+    
+    function syncLabel(rect, label) {
+      const b = rect.getBoundingRect();
+      label.set({ left: b.left + b.width/2, top: b.top + b.height/2 });
+      label.setCoords();
+      canvas.renderAll();
+    }
+    
+    // ---- Add Single Box ----
+    function addSingleBox() {
+      const zoneId = document.getElementById('single-zone-id').value ||
+                     ('X' + String(zoneBoxes.length + 1).padStart(2, '0'));
+      const capacity = parseInt(document.getElementById('single-capacity').value) || 1;
+      
+      if (zoneBoxes.find(z => z.zoneId === zoneId)) {
+        showToast(`Zone ${zoneId} already exists`, 'error');
+        return;
+      }
+      
+      const w = CW/6, h = CH/5;
+      addZoneBox((CW-w)/2, (CH-h)/2, w, h, zoneId, capacity, zoneBoxes.length % COLORS.length);
+      updateZoneList();
+      showToast(`Added zone ${zoneId}`, 'success');
+    }
+    
+    // ---- Delete ----
+    function deleteSelected() {
+      const active = canvas.getActiveObject();
+      if (!active || !active._zoneId) { showToast('Select a box first', 'error'); return; }
+      removeZoneBox(active._zoneId);
+    }
+    
+    function removeZoneBox(zoneId) {
+      const idx = zoneBoxes.findIndex(z => z.zoneId === zoneId);
+      if (idx === -1) return;
+      const entry = zoneBoxes[idx];
+      canvas.remove(entry.rect);
+      canvas.remove(entry.label);
+      zoneBoxes.splice(idx, 1);
+      canvas.discardActiveObject();
+      canvas.renderAll();
+      updateZoneList();
+    }
+    
+    function clearAllBoxes() {
+      if (zoneBoxes.length && !confirm(`Clear all ${zoneBoxes.length} zones from canvas?`)) return;
+      zoneBoxes.forEach(z => { canvas.remove(z.rect); canvas.remove(z.label); });
+      zoneBoxes = [];
+      canvas.discardActiveObject();
+      canvas.renderAll();
+      updateZoneList();
+    }
+    
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (e.target.tagName === 'INPUT') return;
+        deleteSelected();
+      }
+    });
+    
+    // ---- Duplicate ----
+    function duplicateSelected() {
+      const active = canvas.getActiveObject();
+      if (!active || !active._zoneId) { showToast('Select a box first', 'error'); return; }
+      
+      const b = active.getBoundingRect();
+      const origId = active._zoneId;
+      const m = origId.match(/^([A-Za-z]*)(\d+)$/);
+      let newId = m ? m[1] + String(parseInt(m[2])+1).padStart(m[2].length, '0') : origId+'_copy';
+      while (zoneBoxes.find(z => z.zoneId === newId)) {
+        const m2 = newId.match(/^([A-Za-z]*)(\d+)$/);
+        newId = m2 ? m2[1]+String(parseInt(m2[2])+1).padStart(m2[2].length,'0') : newId+'2';
+      }
+      
+      addZoneBox(b.left+20, b.top+20, b.width, b.height, newId, active._capacity||1, active._colorIdx||0);
+      updateZoneList();
+      showToast(`Duplicated as ${newId}`, 'success');
+    }
+    
+    // ---- Zone List ----
+    function updateZoneList() {
+      const list = document.getElementById('zone-list');
+      document.getElementById('zone-count').textContent = zoneBoxes.length;
+      
+      if (!zoneBoxes.length) {
+        list.innerHTML = '<div style="color:var(--text-secondary);font-size:13px;">No zones yet. Generate a grid above.</div>';
+        return;
+      }
+      
+      list.innerHTML = zoneBoxes.map(z => {
+        const b = z.rect.getBoundingRect();
+        const pW = (b.width/CW*100).toFixed(1);
+        const pH = (b.height/CH*100).toFixed(1);
+        return `<div class="zone-item" onclick="selectZone('${z.zoneId}')">
+          <div><div class="name">${z.zoneId}</div><div class="meta">${pW}% &times; ${pH}%</div></div>
+          <button class="delete-btn" onclick="event.stopPropagation();removeZoneBox('${z.zoneId}')">&times;</button>
+        </div>`;
+      }).join('');
+    }
+    
+    function selectZone(zoneId) {
+      const entry = zoneBoxes.find(z => z.zoneId === zoneId);
+      if (!entry) return;
+      canvas.setActiveObject(entry.rect);
+      canvas.renderAll();
+    }
+    
+    // ---- Save All ----
+    async function saveAllZones(clearExisting) {
+      if (!zoneBoxes.length) { showToast('No zones to save', 'error'); return; }
+      if (clearExisting && !confirm('This will DELETE all existing zones and replace with current canvas. Continue?')) return;
+      
+      const zones = zoneBoxes.map(z => {
+        const b = z.rect.getBoundingRect();
+        const x1 = b.left/CW*100, y1 = b.top/CH*100;
+        const x2 = (b.left+b.width)/CW*100, y2 = (b.top+b.height)/CH*100;
+        return {
+          zone_id: z.zoneId, name: z.zoneId,
+          capacity_units: z.capacity || 1,
+          polygon_json: JSON.stringify([[x1,y1],[x2,y1],[x2,y2],[x1,y2]])
+        };
+      });
+      
+      try {
+        const resp = await fetch('/admin/zones/bulk', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ camera_id: cameraId, zones, clear_existing: clearExisting })
+        });
+        const data = await resp.json();
+        if (!resp.ok) { showToast(data.error||'Failed to save','error'); return; }
+        showToast(`Saved ${data.saved} zones successfully!`, 'success');
+      } catch(err) { showToast('Network error: '+err.message, 'error'); }
+    }
+    
+    // ---- Load Existing Zones ----
+    async function loadExistingZones() {
+      try {
+        const resp = await fetch(`/admin/zones.json?camera_id=${cameraId}`);
+        const data = await resp.json();
+        if (!data.zones || !data.zones.length) return;
+        
+        data.zones.forEach((z, i) => {
+          try {
+            const pts = JSON.parse(z.polygon_json || '[]');
+            if (pts.length < 3) return;
+            const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+            const minX = Math.min(...xs)/100*CW, minY = Math.min(...ys)/100*CH;
+            const maxX = Math.max(...xs)/100*CW, maxY = Math.max(...ys)/100*CH;
+            addZoneBox(minX, minY, maxX-minX, maxY-minY, z.zone_id, z.capacity||1, i%COLORS.length);
+          } catch(e) {}
+        });
+        updateZoneList();
+      } catch(e) {}
+    }
+    
+    // ---- Toast ----
+    function showToast(msg, type) {
+      const old = document.querySelector('.toast');
+      if (old) old.remove();
+      const t = document.createElement('div');
+      t.className = `toast toast-${type}`;
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(() => t.remove(), 3000);
+    }
+    
+    // ---- Canvas Selection Sync ----
+    canvas.on('selection:created', e => {
+      const obj = e.selected?.[0];
+      if (obj?._zoneId) highlightListItem(obj._zoneId);
+    });
+    canvas.on('selection:updated', e => {
+      const obj = e.selected?.[0];
+      if (obj?._zoneId) highlightListItem(obj._zoneId);
+    });
+    canvas.on('selection:cleared', () => {
+      document.querySelectorAll('.zone-item').forEach(el => el.classList.remove('selected'));
+    });
+    
+    function highlightListItem(zoneId) {
+      document.querySelectorAll('.zone-item').forEach(el => {
+        el.classList.toggle('selected', el.querySelector('.name')?.textContent === zoneId);
+        if (el.classList.contains('selected')) el.scrollIntoView({ block: 'nearest' });
+      });
+    }
+    
+    // ---- Init ----
+    loadBackground();
+    loadExistingZones();
+  </script>
+</body>
+</html>

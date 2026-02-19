@@ -1,0 +1,9 @@
+{
+  "venvPath": ".",
+  "venv": ".venv",
+  "extraPaths": [
+    "services/worker",
+    "services/api"
+  ],
+  "pythonVersion": "3.12"
+}

@@ -1,0 +1,28 @@
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Data directories
+data/ftp/
+data/images/
+
+# Model files
+models/*.onnx
+models/*.pt
+ml/zonecls/runs/
+ml/zonecls/dataset/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
