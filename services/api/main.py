@@ -1558,12 +1558,13 @@ def admin_system_resources():
 
 @app.route("/admin/system/config.json", methods=["GET"])
 def admin_system_config():
+    yolo_enabled = os.getenv("YOLO_ENABLED", "false").lower() == "true"
     return jsonify({
         "config": {
-            "Zone Classifier Mode": os.getenv("ZONECLS_MODE", "placeholder"),
-            "YOLO Evidence Enabled": os.getenv("YOLO_ENABLED", "false"),
+            "Detection Mode": "YOLO + Overlap" if yolo_enabled else os.getenv("ZONECLS_MODE", "placeholder"),
+            "YOLO Enabled": str(yolo_enabled),
             "YOLO Model": os.getenv("YOLO_MODEL", "yolov8n.pt"),
-            "YOLO Confidence": os.getenv("YOLO_CONFIDENCE", "0.80"),
+            "YOLO Confidence": os.getenv("YOLO_CONFIDENCE", "0.50"),
             "Overlap Threshold": os.getenv("OVERLAP_THRESHOLD", "0.30"),
             "Poll Interval": os.getenv("POLL_INTERVAL", "1.0") + "s",
             "Image Root": IMAGE_ROOT,

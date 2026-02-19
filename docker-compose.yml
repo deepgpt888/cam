@@ -101,9 +101,9 @@ services:
       IMAGE_ROOT: /data/images
       YOLO_QUEUE_REDIS: "redis:6379"
       REDIS_USE_DB_FALLBACK: "true"
-      YOLO_CONFIDENCE: "0.80"
+      YOLO_CONFIDENCE: "0.50"
       YOLO_MODEL: "yolov8n.pt"
-      YOLO_ENABLED: "false"
+      YOLO_ENABLED: "true"
       ZONECLS_MODE: "placeholder"
       ZONECLS_MODEL_PATH: "/models/zonecls.onnx"
       ZONECLS_THRESHOLD: "0.55"

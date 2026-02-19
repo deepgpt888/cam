@@ -180,16 +180,37 @@ class InferencePipeline:
 
         session.flush()
 
+        # ---- Run YOLO detection (if enabled) ----
+        all_detections = []
+        vehicle_detections = []
+        if self.yolo_enabled and self.yolo_processor:
+            all_detections = self.yolo_processor.detect(dest_path)
+            vehicle_detections = [d for d in all_detections if d["class"] in VALID_CLASSES]
+            log.info("[%s] YOLO detected %d vehicles (%d total objects)",
+                     camera.camera_id, len(vehicle_detections), len(all_detections))
+
+        # ---- Zone occupancy ----
         zones = session.query(Zone).filter(Zone.camera_id == camera.id).all()
-        occupied_any = False
         for zone in zones:
             zone_polygon = json.loads(zone.polygon_json)
-            prediction = self.zone_classifier.predict_zone_occupied(image, zone_polygon)
-            occupied = prediction.occupied
-            occupied_any = occupied_any or occupied
 
-            occupied_units = 1 if occupied else 0
+            if self.yolo_enabled and self.yolo_processor:
+                # YOLO-based zone occupancy: count vehicles overlapping this zone
+                zone_polygon_px = [
+                    [pt[0] / 100.0 * width, pt[1] / 100.0 * height]
+                    for pt in zone_polygon
+                ]
+                zone_vehicles = self.yolo_processor.filter_detections_for_zone(
+                    vehicle_detections, zone_polygon_px,
+                )
+                occupied_units = len(zone_vehicles)
+            else:
+                # Fallback: ZoneClassifier (placeholder or ONNX)
+                prediction = self.zone_classifier.predict_zone_occupied(image, zone_polygon)
+                occupied_units = 1 if prediction.occupied else 0
+
             capacity = zone.capacity_units or 1
+            occupied_units = min(occupied_units, capacity)  # cap at capacity
             state = _zone_state_label(occupied_units, capacity)
 
             zone_state = session.query(ZoneState).filter(ZoneState.zone_id == zone.id).first()
@@ -237,18 +258,16 @@ class InferencePipeline:
             else:
                 self.pending_states.pop(zone.id, None)
 
-        if self.yolo_enabled and self.yolo_processor and occupied_any:
-            detections = self.yolo_processor.detect(dest_path)
-            filtered = [d for d in detections if d["class"] in VALID_CLASSES]
-            for det in filtered:
-                det_row = Detection(
-                    snapshot_id=snapshot.id,
-                    class_name=det["class"],
-                    confidence=det["confidence"],
-                    bbox_json=self.yolo_processor.to_bbox_json(det, width, height),
-                    created_at=now,
-                )
-                session.add(det_row)
+        # ---- Store YOLO detections as evidence ----
+        for det in vehicle_detections:
+            det_row = Detection(
+                snapshot_id=snapshot.id,
+                class_name=det["class"],
+                confidence=det["confidence"],
+                bbox_json=self.yolo_processor.to_bbox_json(det, width, height),
+                created_at=now,
+            )
+            session.add(det_row)
 
         snapshot.processed_at = datetime.utcnow()
 
