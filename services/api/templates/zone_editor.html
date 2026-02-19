@@ -169,7 +169,7 @@
     <div class="canvas-panel">
       <div class="canvas-bar">
         <span class="cam-label">Camera: {{ camera_id }}</span>
-        <button class="tb" id="btn-draw" onclick="toggleDraw()">&#9998; Draw Area</button>
+        <button class="tb" id="btn-draw" onclick="toggleDraw()">&#9998; Draw Polygon</button>
         <button class="tb" onclick="delSelected()">&#128465; Delete</button>
         <button class="tb" onclick="dupSelected()">&#10697; Duplicate</button>
         <button class="tb danger" onclick="clearAll()">&#10005; Clear All</button>
@@ -177,7 +177,7 @@
       <div class="canvas-body">
         <canvas id="canvas"></canvas>
       </div>
-      <div class="canvas-footer" id="footer">Click <b>Draw Area</b> to outline a parking section, or load existing zones.</div>
+      <div class="canvas-footer" id="footer">Click <b>Draw Polygon</b> to outline a parking section — click multiple points, then close by clicking near start or pressing <b>Enter</b>.</div>
     </div>
 
     <!-- SIDEBAR -->
@@ -187,7 +187,7 @@
       <div class="card" id="c1">
         <div class="card-hdr"><span class="badge" id="b1">1</span> Draw Parking Area</div>
         <p class="hint" style="margin-bottom:10px;">
-          Click <b>&#9998; Draw Area</b> then <b>click &amp; drag</b> on the image to draw a rectangle over a parking section. You can draw multiple areas.
+          Click <b>&#9998; Draw Polygon</b> then <b>click points</b> on the image to outline the parking area. Close the shape by clicking near the first point or pressing <b>Enter</b>. Press <b>Esc</b> to cancel.
         </p>
         <div id="area-info" style="display:none;">
           <div class="area-preview">
@@ -292,16 +292,23 @@
     canvas.renderAll();
   }
 
-  /* ========== STEP 1 — DRAW AREA ========== */
-  let drawMode = false, drawing = false;
-  let dStartX = 0, dStartY = 0;
-  let areaRect = null, areaCoords = null;
+  /* ========== STEP 1 — DRAW POLYGON ========== */
+  let drawMode = false;
+  let polyPoints = [];      // [{x,y}] clicked vertices
+  let polyDots   = [];      // fabric.Circle handles
+  let polyLines  = [];      // fabric.Line segments
+  let previewLine = null;   // dashed line following the cursor
+  let areaPolygon = null;   // finalised fabric.Polygon outline
+  let areaCoords  = null;   // {x,y,w,h,points} used for split
+
+  const CLOSE_DIST = 18;    // px — snap-to-close radius
 
   function toggleDraw() {
     drawMode = !drawMode;
     if (drawMode) {
       document.getElementById('btn-draw').classList.add('active');
-      document.getElementById('footer').textContent = '\u270e DRAW MODE \u2014 click & drag to outline the parking area';
+      document.getElementById('footer').innerHTML =
+        '\u270e POLYGON MODE &mdash; click to add points &bull; click near <b>first point</b> or press <b>Enter</b> to close &bull; <b>Esc</b> cancels';
       document.getElementById('footer').classList.add('active');
       canvas.defaultCursor = 'crosshair'; canvas.hoverCursor = 'crosshair';
       canvas.selection = false;
@@ -310,13 +317,15 @@
       document.getElementById('b1').classList.add('on');
       document.getElementById('c1').classList.add('hl');
     } else {
-      endDraw();
+      cancelPoly();
     }
   }
+
   function endDraw() {
-    drawMode = false; drawing = false;
+    drawMode = false;
     document.getElementById('btn-draw').classList.remove('active');
-    document.getElementById('footer').innerHTML = 'Click a box to select. Drag to move. Drag corners to resize. Press <b>Delete</b> to remove.';
+    document.getElementById('footer').innerHTML =
+      'Click a box to select. Drag to move. Drag corners to resize. Press <b>Delete</b> to remove.';
     document.getElementById('footer').classList.remove('active');
     canvas.defaultCursor = 'default'; canvas.hoverCursor = 'move';
     canvas.selection = true;
@@ -326,49 +335,124 @@
     document.getElementById('c1').classList.remove('hl');
   }
 
-  canvas.on('mouse:down', opt => {
-    if (!drawMode) return;
-    drawing = true;
-    const p = canvas.getPointer(opt.e);
-    dStartX = p.x; dStartY = p.y;
-    if (areaRect) { canvas.remove(areaRect); areaRect = null; }
-    areaRect = new fabric.Rect({
-      left: dStartX, top: dStartY, width: 0, height: 0,
-      fill: 'rgba(249,115,22,.1)', stroke: '#f97316', strokeWidth: 2,
-      strokeDashArray: [8,4], selectable: false, evented: false, rx: 3, ry: 3, _isArea: true
+  function cancelPoly() {
+    /* Remove all in-progress drawing objects */
+    polyDots.forEach(d => canvas.remove(d));
+    polyLines.forEach(l => canvas.remove(l));
+    if (previewLine) { canvas.remove(previewLine); previewLine = null; }
+    polyPoints = []; polyDots = []; polyLines = [];
+    endDraw();
+  }
+
+  function addPolyPoint(x, y) {
+    /* Dot at vertex */
+    const isFirst = polyPoints.length === 0;
+    const dot = new fabric.Circle({
+      left: x - 5, top: y - 5, radius: 5,
+      fill: isFirst ? '#f97316' : '#fff',
+      stroke: '#f97316', strokeWidth: 2,
+      selectable: false, evented: false, _isPoly: true
     });
-    canvas.add(areaRect);
-  });
-  canvas.on('mouse:move', opt => {
-    if (!drawMode || !drawing || !areaRect) return;
-    const p = canvas.getPointer(opt.e);
-    areaRect.set({
-      left: Math.min(dStartX, p.x), top: Math.min(dStartY, p.y),
-      width: Math.abs(p.x - dStartX), height: Math.abs(p.y - dStartY)
-    });
-    canvas.renderAll();
-  });
-  canvas.on('mouse:up', () => {
-    if (!drawMode || !drawing) return;
-    drawing = false;
-    if (!areaRect || areaRect.width < 30 || areaRect.height < 20) {
-      if (areaRect) { canvas.remove(areaRect); areaRect = null; }
-      toast('Area too small \u2014 drag a bigger rectangle', 'err'); return;
+    canvas.add(dot);
+    polyDots.push(dot);
+
+    /* Line from previous point */
+    if (polyPoints.length > 0) {
+      const prev = polyPoints[polyPoints.length - 1];
+      const seg = new fabric.Line([prev.x, prev.y, x, y], {
+        stroke: '#f97316', strokeWidth: 2, strokeDashArray: [6, 3],
+        selectable: false, evented: false, _isPoly: true
+      });
+      canvas.add(seg);
+      polyLines.push(seg);
     }
-    areaCoords = { x: areaRect.left, y: areaRect.top, w: areaRect.width, h: areaRect.height };
+
+    polyPoints.push({ x, y });
+
+    /* Update or create the preview (cursor-following) line */
+    if (previewLine) canvas.remove(previewLine);
+    previewLine = new fabric.Line([x, y, x, y], {
+      stroke: '#f97316', strokeWidth: 1.5, strokeDashArray: [4, 4],
+      selectable: false, evented: false, opacity: .6, _isPoly: true
+    });
+    canvas.add(previewLine);
+    canvas.renderAll();
+  }
+
+  function closePoly() {
+    if (polyPoints.length < 3) {
+      toast('Need at least 3 points to close the polygon', 'err'); return;
+    }
+    /* Remove temp objects */
+    polyDots.forEach(d => canvas.remove(d));
+    polyLines.forEach(l => canvas.remove(l));
+    if (previewLine) { canvas.remove(previewLine); previewLine = null; }
+
+    /* Build fabric.Polygon */
+    const pts = polyPoints.map(p => ({ x: p.x, y: p.y }));
+    if (areaPolygon) canvas.remove(areaPolygon);
+    areaPolygon = new fabric.Polygon(pts, {
+      fill: 'rgba(249,115,22,.10)', stroke: '#f97316', strokeWidth: 2,
+      strokeDashArray: [8, 4], selectable: false, evented: false, _isArea: true
+    });
+    canvas.add(areaPolygon);
+
+    /* Bounding box used by split */
+    const xs = polyPoints.map(p => p.x), ys = polyPoints.map(p => p.y);
+    const minX = Math.min(...xs), minY = Math.min(...ys);
+    const maxX = Math.max(...xs), maxY = Math.max(...ys);
+    areaCoords = { x: minX, y: minY, w: maxX - minX, h: maxY - minY, points: polyPoints };
+
+    polyPoints = []; polyDots = []; polyLines = [];
+
     document.getElementById('area-info').style.display = 'block';
     document.getElementById('area-dims').textContent =
       Math.round(areaCoords.w) + '\u00d7' + Math.round(areaCoords.h) + ' px  (' +
-      (areaCoords.w/CW*100).toFixed(1) + '% \u00d7 ' + (areaCoords.h/CH*100).toFixed(1) + '%)';
+      (areaCoords.w / CW * 100).toFixed(1) + '% \u00d7 ' + (areaCoords.h / CH * 100).toFixed(1) + '%)  ' +
+      pts.length + ' vertices';
+
     document.getElementById('btn-split').disabled = false;
     endDraw();
     document.getElementById('b2').classList.add('on');
     document.getElementById('c2').classList.add('hl');
-    toast('Area drawn \u2014 set number of spaces and click Split', 'ok');
+    toast('Polygon closed \u2014 set spaces and click Split', 'ok');
+  }
+
+  /* Mouse handlers — polygon mode */
+  canvas.on('mouse:down', opt => {
+    if (!drawMode) return;
+    const p = canvas.getPointer(opt.e);
+
+    /* Double-click closes */
+    if (opt.e.detail === 2 && polyPoints.length >= 2) { closePoly(); return; }
+
+    /* Click near first point closes */
+    if (polyPoints.length >= 3) {
+      const f = polyPoints[0];
+      const dx = p.x - f.x, dy = p.y - f.y;
+      if (Math.sqrt(dx*dx + dy*dy) < CLOSE_DIST) { closePoly(); return; }
+    }
+
+    addPolyPoint(p.x, p.y);
+  });
+
+  canvas.on('mouse:move', opt => {
+    if (!drawMode || !previewLine || polyPoints.length === 0) return;
+    const p = canvas.getPointer(opt.e);
+
+    /* Snap cursor hint: highlight first dot when close */
+    const f = polyPoints[0];
+    const dx = p.x - f.x, dy = p.y - f.y;
+    const near = Math.sqrt(dx*dx + dy*dy) < CLOSE_DIST;
+    polyDots[0]?.set({ radius: near ? 8 : 5, fill: '#f97316' });
+
+    previewLine.set({ x2: near ? f.x : p.x, y2: near ? f.y : p.y });
+    canvas.renderAll();
   });
 
   function clearArea() {
-    if (areaRect) { canvas.remove(areaRect); areaRect = null; }
+    cancelPoly();
+    if (areaPolygon) { canvas.remove(areaPolygon); areaPolygon = null; }
     areaCoords = null;
     document.getElementById('area-info').style.display = 'none';
     document.getElementById('btn-split').disabled = true;
@@ -407,7 +491,7 @@
       }
     }
 
-    if (areaRect) { canvas.remove(areaRect); areaRect = null; }
+    if (areaPolygon) { canvas.remove(areaPolygon); areaPolygon = null; }
     areaCoords = null;
     document.getElementById('area-info').style.display = 'none';
     document.getElementById('btn-split').disabled = true;
@@ -492,7 +576,8 @@
     if (zones.length && !confirm('Clear all ' + zones.length + ' zones from canvas?')) return;
     zones.forEach(z => { canvas.remove(z.rect); canvas.remove(z.label); });
     zones = [];
-    if (areaRect) { canvas.remove(areaRect); areaRect = null; }
+    if (areaPolygon) { canvas.remove(areaPolygon); areaPolygon = null; }
+    cancelPoly();
     areaCoords = null;
     document.getElementById('area-info').style.display = 'none';
     document.getElementById('btn-split').disabled = true;
@@ -502,7 +587,8 @@
   document.addEventListener('keydown', e => {
     if (e.target.tagName === 'INPUT') return;
     if (e.key === 'Delete' || e.key === 'Backspace') delSelected();
-    if (e.key === 'Escape' && drawMode) endDraw();
+    if (e.key === 'Escape' && drawMode) cancelPoly();
+    if ((e.key === 'Enter') && drawMode) closePoly();
   });
 
   /* ========== ZONE LIST ========== */
