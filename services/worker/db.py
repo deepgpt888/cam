@@ -127,3 +127,11 @@ class ZoneEvent(Base):
     event_type: Mapped[Optional[str]] = mapped_column(String(50), default=None)
     triggered_at: Mapped[Optional[datetime]] = mapped_column(default=None)
     created_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(default=None)

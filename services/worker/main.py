@@ -78,14 +78,14 @@ def run_worker():
 
     print("CamPark worker started")
     log.info(
-        "Zone classifier mode=%s  YOLO=%s  threads=%d  poll=%.1fs  hours=%s-%s",
+        "Zone classifier mode=%s  YOLO=%s  threads=%d  poll=%.1fs",
         os.getenv("ZONECLS_MODE", "placeholder"),
         YOLO_ENABLED,
         WORKER_THREADS,
         POLL_INTERVAL,
-        os.getenv("OPERATING_HOURS_START", "6"),
-        os.getenv("OPERATING_HOURS_END",   "18"),
     )
+    log.info("Operating hours seeded from env: %s–%s:00 (can be overridden in admin → System → Settings)",
+             pipeline.operating_start, pipeline.operating_end)
 
     executor = ThreadPoolExecutor(max_workers=WORKER_THREADS)
 
@@ -94,6 +94,8 @@ def run_worker():
         list_session = SessionLocal()
         try:
             cameras = list_session.query(Camera).all()
+            # Refresh runtime settings from DB so changes take effect without restart
+            pipeline.refresh_settings(list_session)
         finally:
             list_session.close()
 

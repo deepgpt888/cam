@@ -25,6 +25,7 @@ from app.db import (
     SessionLocal,
     Site,
     Snapshot,
+    SystemSetting,
     TokenLedger,
     Zone,
     ZoneEvent,
@@ -1577,6 +1578,49 @@ def admin_system_config():
             "health_interval": HEALTH_INTERVAL_SECONDS,
         },
     })
+
+
+@app.route("/admin/system/settings.json", methods=["GET"])
+def admin_system_settings_get():
+    """Return current runtime settings stored in the DB (falls back to env defaults)."""
+    session = SessionLocal()
+    try:
+        rows = session.query(SystemSetting).all()
+        db_vals = {r.key: r.value for r in rows}
+    finally:
+        session.close()
+
+    defaults = {
+        "operating_hours_start": os.getenv("OPERATING_HOURS_START", "6"),
+        "operating_hours_end":   os.getenv("OPERATING_HOURS_END", "18"),
+        "scene_diff_threshold":  os.getenv("SCENE_DIFF_THRESHOLD", "6.0"),
+    }
+    return jsonify({**defaults, **db_vals})
+
+
+@app.route("/admin/system/settings", methods=["POST"])
+def admin_system_settings_save():
+    """Upsert one or more runtime settings.  Body: {key: value, ...}"""
+    data = request.get_json(force=True) or {}
+    allowed_keys = {"operating_hours_start", "operating_hours_end", "scene_diff_threshold"}
+    session = SessionLocal()
+    try:
+        for key, value in data.items():
+            if key not in allowed_keys:
+                continue
+            row = session.query(SystemSetting).filter(SystemSetting.key == key).first()
+            if row:
+                row.value = str(value)
+                row.updated_at = datetime.utcnow()
+            else:
+                session.add(SystemSetting(key=key, value=str(value), updated_at=datetime.utcnow()))
+        session.commit()
+        return jsonify({"ok": True})
+    except Exception as exc:
+        session.rollback()
+        return jsonify({"ok": False, "error": str(exc)}), 500
+    finally:
+        session.close()
 
 
 @app.route("/admin/system/health-events.json", methods=["GET"])

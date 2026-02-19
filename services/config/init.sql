@@ -157,6 +157,20 @@ CREATE INDEX idx_zone_events_triggered ON zone_events(triggered_at DESC);
 CREATE INDEX idx_camera_health_camera_id ON camera_health_events(camera_id);
 CREATE INDEX idx_camera_health_triggered ON camera_health_events(triggered_at DESC);
 
+-- System Settings (runtime-configurable key/value store)
+CREATE TABLE IF NOT EXISTS system_settings (
+    key VARCHAR(100) PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Seed defaults (no-op if already set)
+INSERT INTO system_settings (key, value) VALUES
+    ('operating_hours_start', '6'),
+    ('operating_hours_end',   '18'),
+    ('scene_diff_threshold',  '6.0')
+ON CONFLICT DO NOTHING;
+
 -- Insert default test data
 INSERT INTO projects (name) VALUES ('POC_Project_01') ON CONFLICT DO NOTHING;
 

@@ -10,7 +10,7 @@ from typing import Dict, Optional, Tuple
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 
-from db import Detection, Snapshot, Zone, ZoneEvent, ZoneState
+from db import Detection, Snapshot, SystemSetting, Zone, ZoneEvent, ZoneState
 from infer.zonecls.zone_classifier import ZoneClassifier
 from yolo_processor import YoloProcessor
 
@@ -18,16 +18,10 @@ log = logging.getLogger(__name__)
 
 VALID_CLASSES = {"car", "truck", "motorcycle", "bicycle"}
 
-# Operating hours (local time, 24h).  Override via env:
-#   OPERATING_HOURS_START=6  OPERATING_HOURS_END=18
-OPERATING_START = int(os.getenv("OPERATING_HOURS_START", "6"))
-OPERATING_END   = int(os.getenv("OPERATING_HOURS_END",   "18"))
-
-# Perceptual-diff threshold (0–255 average pixel delta).
-# Frames more similar than this are treated as "no change" and
-# skip inference entirely — only heartbeat is updated.
-# 0 = always infer (disable smart-skip).
-SCENE_DIFF_THRESHOLD = float(os.getenv("SCENE_DIFF_THRESHOLD", "6.0"))
+# Env-var defaults (used before first DB refresh and as fallback)
+_DEFAULT_OPERATING_START    = int(os.getenv("OPERATING_HOURS_START", "6"))
+_DEFAULT_OPERATING_END      = int(os.getenv("OPERATING_HOURS_END",   "18"))
+_DEFAULT_SCENE_DIFF_THRESHOLD = float(os.getenv("SCENE_DIFF_THRESHOLD", "6.0"))
 
 # Thumbnail size used for perceptual diff (smaller = faster, 32 is plenty)
 _THUMB = (32, 32)
@@ -56,6 +50,32 @@ class InferencePipeline:
         # Per-camera perceptual fingerprints: camera_id -> np.ndarray (32x32 uint8)
         self._last_thumb: Dict[int, np.ndarray] = {}
 
+        # Runtime settings — seeded from env, refreshed from DB each worker cycle
+        self.operating_start    = _DEFAULT_OPERATING_START
+        self.operating_end      = _DEFAULT_OPERATING_END
+        self.scene_diff_threshold = _DEFAULT_SCENE_DIFF_THRESHOLD
+
+    # ------------------------------------------------------------------
+    # Settings refresh (called once per worker cycle from main.py)
+    # ------------------------------------------------------------------
+
+    def refresh_settings(self, session) -> None:
+        """Re-read operating hours and scene diff threshold from system_settings table."""
+        try:
+            rows = session.query(SystemSetting).filter(
+                SystemSetting.key.in_([
+                    "operating_hours_start",
+                    "operating_hours_end",
+                    "scene_diff_threshold",
+                ])
+            ).all()
+            settings = {r.key: r.value for r in rows}
+            self.operating_start      = int(settings.get("operating_hours_start",   str(_DEFAULT_OPERATING_START)))
+            self.operating_end        = int(settings.get("operating_hours_end",     str(_DEFAULT_OPERATING_END)))
+            self.scene_diff_threshold = float(settings.get("scene_diff_threshold",  str(_DEFAULT_SCENE_DIFF_THRESHOLD)))
+        except Exception as exc:  # DB unavailable — keep previous values
+            log.warning("refresh_settings failed, keeping previous values: %s", exc)
+
     # ------------------------------------------------------------------
     # Perceptual diff helpers
     # ------------------------------------------------------------------
@@ -66,7 +86,7 @@ class InferencePipeline:
 
     def _scene_changed(self, camera_id: int, thumb: np.ndarray) -> Tuple[bool, float]:
         """Return (changed, mean_pixel_delta). Updates stored thumbnail on change."""
-        if SCENE_DIFF_THRESHOLD <= 0:
+        if self.scene_diff_threshold <= 0:
             return True, 255.0  # disabled — always process
         prev = self._last_thumb.get(camera_id)
         if prev is None:
@@ -74,7 +94,7 @@ class InferencePipeline:
             self._last_thumb[camera_id] = thumb
             return True, 255.0
         diff = float(np.mean(np.abs(thumb - prev)))
-        if diff >= SCENE_DIFF_THRESHOLD:
+        if diff >= self.scene_diff_threshold:
             self._last_thumb[camera_id] = thumb
             return True, diff
         return False, diff
@@ -99,14 +119,14 @@ class InferencePipeline:
 
         # ---- Operating hours gate ----
         local_hour = datetime.now().hour  # server local time
-        in_hours = OPERATING_START <= local_hour < OPERATING_END
+        in_hours = self.operating_start <= local_hour < self.operating_end
         if not in_hours:
             # Outside operating window — record heartbeat, skip inference
             camera.last_seen_at = now
             camera.status = "ONLINE"
             _discard(file_path)  # remove file, nothing to store
-            log.debug("[%s] Outside operating hours (%02d:00) — heartbeat only",
-                      camera.camera_id, local_hour)
+            log.debug("[%s] Outside operating hours (%02d:00 — window %02d–%02d) — heartbeat only",
+                      camera.camera_id, local_hour, self.operating_start, self.operating_end)
             return
 
         try:
@@ -128,7 +148,7 @@ class InferencePipeline:
             camera.status = "ONLINE"
             _discard(file_path)
             log.debug("[%s] Scene unchanged (diff=%.2f < %.2f) — heartbeat only",
-                      camera.camera_id, delta, SCENE_DIFF_THRESHOLD)
+                      camera.camera_id, delta, self.scene_diff_threshold)
             return
 
         log.info("[%s] Scene changed (diff=%.2f) — running inference",

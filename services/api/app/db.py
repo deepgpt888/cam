@@ -165,3 +165,11 @@ class TokenLedger(Base):
     response_time_ms: Mapped[Optional[int]] = mapped_column(default=None)
     tokens_used: Mapped[Optional[int]] = mapped_column(default=None)
     created_at: Mapped[Optional[datetime]] = mapped_column(default=None)
+
+
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(default=None)
