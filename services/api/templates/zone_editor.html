@@ -26,7 +26,6 @@
     .tb{padding:5px 12px;border:1px solid var(--border);border-radius:5px;background:var(--bg-hover);color:var(--text-primary);font-size:12px;cursor:pointer;transition:.15s;user-select:none;}
     .tb:hover{border-color:var(--accent);color:#fff;}
     .tb.active{background:var(--orange);border-color:var(--orange);color:#fff;box-shadow:0 0 10px rgba(249,115,22,.35);}
-    .tb.danger:hover{border-color:var(--red);background:var(--red);}
     .canvas-body{flex:1;position:relative;background:#111;display:flex;align-items:center;justify-content:center;overflow:hidden;}
     #k-wrap{position:relative;}
     .canvas-footer{padding:6px 12px;font-size:11px;color:var(--text-secondary);border-top:1px solid var(--border);min-height:28px;}
@@ -67,10 +66,10 @@
     .toast-ok{background:var(--green);color:#fff;}
     .toast-err{background:var(--red);color:#fff;}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-    /* ---- clear modal ---- */
+    /* ---- modals ---- */
     .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(3px);}
     .modal-backdrop.hidden{display:none;}
-    .modal-box{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px 28px 22px;max-width:400px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,.6);}
+    .modal-box{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px 28px 22px;max-width:420px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,.6);}
     .modal-icon{width:48px;height:48px;border-radius:50%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 16px;}
     .modal-title{font-size:16px;font-weight:700;text-align:center;margin-bottom:10px;}
     .modal-body{font-size:13px;color:var(--text-secondary);text-align:center;line-height:1.6;margin-bottom:22px;}
@@ -96,30 +95,32 @@
 </nav>
 
 <div class="editor">
+  <!-- ===== CANVAS PANEL ===== -->
   <div class="canvas-panel">
     <div class="canvas-bar">
       <span class="cam-label">Camera: {{ camera_id }}</span>
-      <button class="tb" id="btn-draw" onclick="startDraw()">&#9632; Draw Area</button>
+      <button class="tb" id="btn-draw" onclick="startDraw()">&#9632; Draw Lane</button>
       <button class="tb" id="btn-cancel" style="display:none" onclick="cancelDraw()">&#10005; Cancel</button>
-      <button class="tb" onclick="deleteSelected()">&#128465; Delete</button>
-      <button class="tb" onclick="duplicateSelected()">&#10697; Duplicate</button>
-      <button class="tb danger" onclick="clearAll()">&#10005; Clear All</button>
+      <button class="tb" onclick="deleteSelected()">&#128465; Delete Lane</button>
     </div>
     <div class="canvas-body">
       <div id="k-wrap"></div>
     </div>
     <div class="canvas-footer" id="footer">
-      Click <b>Draw Area</b> then click <b>4 corner points</b> to outline the parking boundary.
+      Click <b>Draw Lane</b> then click <b>4 corner points</b> to outline the parking lane.
     </div>
   </div>
 
+  <!-- ===== SIDEBAR ===== -->
   <div class="sidebar">
+    <!-- Step 1: Draw -->
     <div class="card" id="c1">
-      <div class="card-hdr"><span class="badge" id="b1">1</span> Draw Parking Area</div>
+      <div class="card-hdr"><span class="badge" id="b1">1</span> Draw Lane Area</div>
       <div class="draw-status" id="ds"></div>
-      <p class="hint">Click <b>Draw Area</b>, then click the <b>4 corners</b> of the parking section (any corner order — the quad auto-closes). Supports any trapezoid shape.</p>
+      <p class="hint">Click <b>Draw Lane</b>, then click the <b>4 corners</b> of the parking lane (any order — auto-ordered TL→TR→BR→BL). Supports any trapezoid shape.</p>
     </div>
 
+    <!-- Step 2: Split -->
     <div class="card" id="c2">
       <div class="card-hdr"><span class="badge" id="b2">2</span> Split into Spaces</div>
       <div class="row-f">
@@ -139,74 +140,72 @@
           </select>
         </div>
       </div>
-      <button class="btn btn-orange" id="btn-split" onclick="splitArea()" disabled>Split into Spaces</button>
-      <p class="hint">Generates perspective-correct trapezoid spaces. Spaces are parented to the area — warp the area and all spaces follow.</p>
+      <button class="btn btn-orange" id="btn-split" onclick="splitLane()" disabled>Split into Spaces</button>
+      <p class="hint">Compartments are derived from the lane backbone — dividers prevent any overlap by design. Drag a <b>divider line</b> to fine-tune a boundary.</p>
     </div>
 
+    <!-- Step 3: Fine-tune list -->
     <div class="card" id="c3">
       <div class="card-hdr"><span class="badge" id="b3">3</span> Fine-Tune</div>
-      <div class="cnt">Groups: <b id="gcnt">0</b> &nbsp; Spaces: <b id="scnt">0</b></div>
+      <div class="cnt">Lanes: <b id="gcnt">0</b> &nbsp; Spaces: <b id="scnt">0</b></div>
       <div class="zone-list" id="zlist"><div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div></div>
       <p class="hint" style="margin-top:8px;">
-        Click to select. <b>No visible handles</b> — drag near a <b>corner</b> to warp, near an <b>edge</b> to shift that edge, or drag <b>inside</b> to move. Cursor changes to indicate the action.
+        <b>No visible handles.</b> Drag near a <b>corner</b> to warp backbone, near a <b>divider line</b> to shift that boundary (slow gain), or drag <b>inside</b> to move. Cursor changes to indicate action.
       </p>
     </div>
 
+    <!-- Save card -->
     <div class="card">
       <div class="card-hdr">&#128190; Save</div>
-      <button class="btn btn-green" onclick="saveZones(false)">Save All Zones</button>
-      <button class="btn btn-red" onclick="showClearModal()">Clear All Zones</button>
-      <p class="hint"><b>Save All</b> adds/updates the canvas zones to the server. <b>Clear All</b> permanently deletes all saved zones for this camera.</p>
+      <button class="btn btn-green"  id="btn-save"    onclick="saveZones()">Save All Zones</button>
+      <button class="btn btn-red"    id="btn-clear"   onclick="openModal('clear')">Clear All</button>
+      <button class="btn btn-ghost"  id="btn-replace" onclick="openModal('replace')">Replace All (Clear + Save)</button>
+      <p class="hint"><b>Save All</b> adds/updates zones. <b>Clear All</b> deletes server zones only (canvas unchanged). <b>Replace All</b> deletes existing then saves current canvas.</p>
     </div>
   </div>
 </div>
 
-<!-- ===== CLEAR ALL MODAL ===== -->
-<div id="clear-modal" class="modal-backdrop hidden" onclick="if(event.target===this)hideClearModal()">
+<!-- ===== SHARED CONFIRM MODAL ===== -->
+<div id="confirm-modal" class="modal-backdrop hidden"
+     onclick="if(event.target===this&&!modalLoading)closeModal()">
   <div class="modal-box">
     <div class="modal-icon">&#9888;</div>
-    <div class="modal-title">Delete All Zones?</div>
-    <div class="modal-body">
-      This will permanently delete <strong>all saved zones</strong> for camera <strong id="modal-cam-label"></strong>.<br>
-      This action <strong style="color:var(--red)">cannot be undone</strong>.
-    </div>
+    <div class="modal-title"  id="modal-title">Confirm</div>
+    <div class="modal-body"   id="modal-body"></div>
     <div class="modal-actions">
-      <button class="btn btn-ghost" onclick="hideClearModal()">Cancel</button>
-      <button class="btn btn-red" onclick="confirmClearAllZones()">Yes, Delete All</button>
+      <button class="btn btn-ghost" id="modal-cancel"  onclick="closeModal()">Cancel</button>
+      <button class="btn btn-red"   id="modal-confirm" onclick="runModalAction()">Confirm</button>
     </div>
   </div>
 </div>
 
 <script>
 /* ================================================================
-   GEOMETRY MODULE
+   GEOMETRY
+   All coordinates normalized [0..1].
+   Quad order: [TL, TR, BR, BL]
 ================================================================ */
 const G = {
-
-  /* --- basic --- */
-  lerp(a,b,t){ return {x:a.x+(b.x-a.x)*t, y:a.y+(b.y-a.y)*t}; },
-  lerpUV(a,b,t){ return {u:a.u+(b.u-a.u)*t, v:a.v+(b.v-a.v)*t}; },
-  clampN(p){ return {x:Math.min(1,Math.max(0,p.x)), y:Math.min(1,Math.max(0,p.y))}; },
-  clampUV(uv){ return {u:Math.min(1,Math.max(0,uv.u)), v:Math.min(1,Math.max(0,uv.v))}; },
   dist(a,b){ return Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2); },
-  centroid(pts){ return {x:pts.reduce((s,p)=>s+p.x,0)/pts.length, y:pts.reduce((s,p)=>s+p.y,0)/pts.length}; },
+  clampN(p){ return {x:Math.min(1,Math.max(0,p.x)),y:Math.min(1,Math.max(0,p.y))}; },
+  centroid(pts){ return {x:pts.reduce((s,p)=>s+p.x,0)/pts.length,y:pts.reduce((s,p)=>s+p.y,0)/pts.length}; },
 
-  /* --- quad ordering: returns [TL, TR, BR, BL] clockwise --- */
+  /* Order 4 points as [TL,TR,BR,BL] clockwise */
   orderQuad(pts){
     const c=this.centroid(pts);
     const s=[...pts].sort((a,b)=>Math.atan2(a.y-c.y,a.x-c.x)-Math.atan2(b.y-c.y,b.x-c.x));
     let mi=0,mv=s[0].x+s[0].y;
-    for(let i=1;i<4;i++){const v=s[i].x+s[i].y; if(v<mv){mv=v;mi=i;}}
-    let o=[]; for(let i=0;i<4;i++) o.push(s[(mi+i)%4]);
+    for(let i=1;i<4;i++){const v=s[i].x+s[i].y;if(v<mv){mv=v;mi=i;}}
+    let o=[];for(let i=0;i<4;i++)o.push(s[(mi+i)%4]);
     const ax=o[1].x-o[0].x,ay=o[1].y-o[0].y,bx=o[2].x-o[1].x,by=o[2].y-o[1].y;
-    if((ax*by-ay*bx)<0) o.reverse();
+    if((ax*by-ay*bx)<0)o.reverse();
     let mi2=0,mv2=o[0].x+o[0].y;
-    for(let i=1;i<4;i++){const v=o[i].x+o[i].y; if(v<mv2){mv2=v;mi2=i;}}
-    const r=[]; for(let i=0;i<4;i++) r.push(o[(mi2+i)%4]);
+    for(let i=1;i<4;i++){const v=o[i].x+o[i].y;if(v<mv2){mv2=v;mi2=i;}}
+    const r=[];for(let i=0;i<4;i++)r.push(o[(mi2+i)%4]);
     return r;
   },
 
-  isConvexQuad(q){
+  isConvex(q){
     const sgn=[];
     for(let i=0;i<4;i++){
       const a=q[i],b=q[(i+1)%4],c=q[(i+2)%4];
@@ -215,194 +214,162 @@ const G = {
     return sgn.every(s=>s)||sgn.every(s=>!s);
   },
 
-  /* --- UV <-> image mapping ---
-     Bilinear: P(u,v) = TL*(1-u)*(1-v) + TR*u*(1-v) + BR*u*v + BL*(1-u)*v
-     quad = [TL,TR,BR,BL] in image-normalized [0..1]
-  */
-  uvToImage(quad,uv){
-    const [TL,TR,BR,BL]=quad, u=uv.u, v=uv.v;
+  /* Bilinear UV→image: P(u,v)=TL*(1-u)*(1-v)+TR*u*(1-v)+BR*u*v+BL*(1-u)*v */
+  uvToImg(q,u,v){
+    const [TL,TR,BR,BL]=q;
     return {
-      x: TL.x*(1-u)*(1-v) + TR.x*u*(1-v) + BR.x*u*v + BL.x*(1-u)*v,
-      y: TL.y*(1-u)*(1-v) + TR.y*u*(1-v) + BR.y*u*v + BL.y*(1-u)*v,
+      x:TL.x*(1-u)*(1-v)+TR.x*u*(1-v)+BR.x*u*v+BL.x*(1-u)*v,
+      y:TL.y*(1-u)*(1-v)+TR.y*u*(1-v)+BR.y*u*v+BL.y*(1-u)*v,
     };
   },
 
-  uvQuadToImage(quad,uvq){
-    return uvq.map(uv=>this.uvToImage(quad,uv));
+  /* Derived compartment [u0,u1]×[v0,v1] → 4-point quad [TL,TR,BR,BL] */
+  cellQuad(q,u0,u1,v0,v1){
+    return [
+      this.uvToImg(q,u0,v0),
+      this.uvToImg(q,u1,v0),
+      this.uvToImg(q,u1,v1),
+      this.uvToImg(q,u0,v1),
+    ];
   },
 
-  /* Inverse: image point -> UV via barycentric decomposition into 2 triangles */
-  imageToUv(quad,p){
-    const [TL,TR,BR,BL]=quad;
-    // Triangle 1: TL(u=0,v=0), TR(u=1,v=0), BR(u=1,v=1)
+  /* Inverse: image point → (u,v) — barycentric on 2 triangles */
+  imgToUv(q,p){
+    const [TL,TR,BR,BL]=q;
     let r=this._bary(TL,TR,BR,p);
-    if(r && r.s>=0 && r.t>=0 && r.s+r.t<=1){
-      // bary: λTL=1-s-t, λTR=t, λBR=s  mapped to uv: TL(0,0),TR(1,0),BR(1,1)
-      const u=r.t+r.s, v2=r.s;
-      return this.clampUV({u,v:v2});
-    }
-    // Triangle 2: TL(u=0,v=0), BR(u=1,v=1), BL(u=0,v=1)
+    if(r&&r.s>=0&&r.t>=0&&r.s+r.t<=1)
+      return {u:Math.min(1,Math.max(0,r.t+r.s)),v:Math.min(1,Math.max(0,r.s))};
     r=this._bary(TL,BR,BL,p);
-    if(r && r.s>=0 && r.t>=0 && r.s+r.t<=1){
-      // bary: wTL=1-s-t, wBR=t, wBL=s  mapped to uv: TL(0,0),BR(1,1),BL(0,1)
-      const u=r.t, v2=r.t+r.s;
-      return this.clampUV({u,v:v2});
-    }
-    // Outside quad — clamp to nearest anyway (for drag tolerance)
-    const u=Math.min(1,Math.max(0,(p.x-TL.x)/(TR.x-TL.x||.001)));
-    const v=Math.min(1,Math.max(0,(p.y-TL.y)/(BL.y-TL.y||.001)));
-    return {u,v};
+    if(r&&r.s>=0&&r.t>=0&&r.s+r.t<=1)
+      return {u:Math.min(1,Math.max(0,r.t)),v:Math.min(1,Math.max(0,r.t+r.s))};
+    return {
+      u:Math.min(1,Math.max(0,(p.x-TL.x)/((TR.x-TL.x)||.001))),
+      v:Math.min(1,Math.max(0,(p.y-TL.y)/((BL.y-TL.y)||.001))),
+    };
   },
 
   _bary(A,B,C,P){
-    const v0x=C.x-A.x,v0y=C.y-A.y;
-    const v1x=B.x-A.x,v1y=B.y-A.y;
-    const v2x=P.x-A.x,v2y=P.y-A.y;
-    const d00=v0x*v0x+v0y*v0y;
-    const d01=v0x*v1x+v0y*v1y;
-    const d02=v0x*v2x+v0y*v2y;
-    const d11=v1x*v1x+v1y*v1y;
-    const d12=v1x*v2x+v1y*v2y;
+    const v0x=C.x-A.x,v0y=C.y-A.y,v1x=B.x-A.x,v1y=B.y-A.y,v2x=P.x-A.x,v2y=P.y-A.y;
+    const d00=v0x*v0x+v0y*v0y,d01=v0x*v1x+v0y*v1y,d02=v0x*v2x+v0y*v2y;
+    const d11=v1x*v1x+v1y*v1y,d12=v1x*v2x+v1y*v2y;
     const inv=d00*d11-d01*d01;
-    if(Math.abs(inv)<1e-10) return null;
-    const s=(d11*d02-d01*d12)/inv;
-    const t=(d00*d12-d01*d02)/inv;
-    return {s,t};
+    if(Math.abs(inv)<1e-10)return null;
+    return {s:(d11*d02-d01*d12)/inv,t:(d00*d12-d01*d02)/inv};
   },
 
-  /* --- UV grid split --- cols x rows, returns array of uvQuads [TL,TR,BR,BL] */
-  splitUvGrid(cols,rows,gapPct=0){
-    const g=gapPct/100;
-    const result=[];
-    for(let r=0;r<rows;r++){
-      const rg=g*0.5/Math.max(rows,1);
-      const v0=r/rows+rg, v1=(r+1)/rows-rg;
-      for(let c=0;c<cols;c++){
-        const cg=g*0.5/Math.max(cols,1);
-        const u0=c/cols+cg, u1=(c+1)/cols-cg;
-        result.push([{u:u0,v:v0},{u:u1,v:v0},{u:u1,v:v1},{u:u0,v:v1}]);
-      }
-    }
-    return result;
-  },
-
-  /* --- hit testing (pixel space) --- */
-  pick(pPx, quadPx, cornerR=14, edgeD=11){
-    // corners first
-    for(let i=0;i<4;i++){
-      if(this.dist(pPx,quadPx[i])<cornerR) return {kind:'corner',index:i};
-    }
-    // edges: 0=TL-TR, 1=TR-BR, 2=BR-BL, 3=BL-TL
-    for(let i=0;i<4;i++){
-      const a=quadPx[i], b=quadPx[(i+1)%4];
-      if(this._ptSegDist(pPx,a,b)<edgeD) return {kind:'edge',index:i};
-    }
-    // inside
-    if(this._ptInPoly(pPx,quadPx)) return {kind:'move'};
-    return {kind:'none'};
-  },
-
-  _ptSegDist(p,a,b){
-    const dx=b.x-a.x,dy=b.y-a.y;
-    const len2=dx*dx+dy*dy;
-    if(len2<1e-6) return this.dist(p,a);
+  ptSegDist(p,a,b){
+    const dx=b.x-a.x,dy=b.y-a.y,len2=dx*dx+dy*dy;
+    if(len2<1e-6)return this.dist(p,a);
     const t=Math.max(0,Math.min(1,((p.x-a.x)*dx+(p.y-a.y)*dy)/len2));
     return this.dist(p,{x:a.x+t*dx,y:a.y+t*dy});
   },
 
-  _ptInPoly(p,poly){
+  ptInPoly(p,poly){
     let inside=false;
     for(let i=0,j=poly.length-1;i<poly.length;j=i++){
       const xi=poly[i].x,yi=poly[i].y,xj=poly[j].x,yj=poly[j].y;
-      if(((yi>p.y)!=(yj>p.y))&&(p.x<(xj-xi)*(p.y-yi)/(yj-yi)+xi)) inside=!inside;
+      if(((yi>p.y)!=(yj>p.y))&&(p.x<(xj-xi)*(p.y-yi)/(yj-yi)+xi))inside=!inside;
     }
     return inside;
   },
-
-  cursorForPick(pick){
-    if(!pick||pick.kind==='none') return '';
-    if(pick.kind==='move') return 'move';
-    if(pick.kind==='corner'){
-      const cursors=['nwse-resize','nesw-resize','nwse-resize','nesw-resize'];
-      return cursors[pick.index];
-    }
-    if(pick.kind==='edge'){
-      return pick.index%2===0?'ns-resize':'ew-resize';
-    }
-    return '';
-  },
-
-  /* edge vertex index pairs */
-  edgeVerts(i){ return [[0,1],[1,2],[2,3],[3,0]][i]; },
 };
 
 /* ================================================================
-   NAMING MODULE
+   NAMING
 ================================================================ */
 const N = {
-  format(prefix,n,pad=2){ return prefix+String(n).padStart(pad,'0'); },
-  nextStart(spaces,prefix){
+  fmt(prefix,n){ return prefix+String(n).padStart(2,'0'); },
+  /* nextStart: reads all existing lanes for the same prefix */
+  nextStart(lanes,prefix){
     let max=0;
-    spaces.forEach(s=>{
-      const m=s.label.match(new RegExp('^'+prefix+'(\\d+)$','i'));
-      if(m) max=Math.max(max,parseInt(m[1]));
+    lanes.forEach(la=>{
+      if(la.prefix===prefix&&la.cols>0&&la.rows>0)
+        max=Math.max(max,la.start+la.cols*la.rows-1);
     });
     return max+1;
   },
-  generate(prefix,start,count,dir='inc'){
-    const ids=[];
-    for(let i=0;i<count;i++){
-      const n=dir==='dec'?start+count-1-i:start+i;
-      ids.push(this.format(prefix,n));
+  /* Generate ordered label array for a lane */
+  labels(la){
+    const total=la.cols*la.rows,arr=[];
+    for(let i=0;i<total;i++){
+      const n=la.dir==='dec'?la.start+total-1-i:la.start+i;
+      arr.push(this.fmt(la.prefix,n));
     }
-    return ids;
+    return arr;
   },
 };
 
 /* ================================================================
    UUID
 ================================================================ */
-function uuid(){ return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:r&0x3|0x8).toString(16);}); }
+function uuid(){return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==='x'?r:r&0x3|0x8).toString(16);});}
 
 /* ================================================================
    PALETTE
 ================================================================ */
 const PAL=[
-  {fill:'rgba(59,130,246,.20)',stroke:'#3b82f6'},
-  {fill:'rgba(34,197,94,.20)', stroke:'#22c55e'},
-  {fill:'rgba(234,179,8,.20)',stroke:'#eab308'},
-  {fill:'rgba(168,85,247,.20)',stroke:'#a855f7'},
-  {fill:'rgba(236,72,153,.20)',stroke:'#ec4899'},
-  {fill:'rgba(249,115,22,.20)',stroke:'#f97316'},
-  {fill:'rgba(20,184,166,.20)',stroke:'#14b8a6'},
-  {fill:'rgba(239,68,68,.20)',stroke:'#ef4444'},
+  {fill:'rgba(59,130,246,.18)',  stroke:'#3b82f6'},
+  {fill:'rgba(34,197,94,.18)',   stroke:'#22c55e'},
+  {fill:'rgba(234,179,8,.18)',   stroke:'#eab308'},
+  {fill:'rgba(168,85,247,.18)',  stroke:'#a855f7'},
+  {fill:'rgba(236,72,153,.18)',  stroke:'#ec4899'},
+  {fill:'rgba(249,115,22,.18)',  stroke:'#f97316'},
+  {fill:'rgba(20,184,166,.18)',  stroke:'#14b8a6'},
+  {fill:'rgba(239,68,68,.18)',   stroke:'#ef4444'},
 ];
 let palIdx=0;
 
 /* ================================================================
-   STATE
+   DATA MODEL — LaneArea ONLY
+   Children (compartments) are derived at render/save time from
+   quad + dividersU + dividersV. Never stored as independent polygons.
+
+   LaneArea {
+     uuid:      string
+     quad:      [{x,y}×4]   // TL,TR,BR,BL normalized 0..1
+     prefix:    string
+     start:     number       // global first index for this lane
+     cols:      number       // 0 = unsplit
+     rows:      number
+     dir:       'inc'|'dec'
+     gapPct:    number
+     dividersU: number[]     // length cols+1, [0..1] sorted
+     dividersV: number[]     // length rows+1, [0..1] sorted
+     ci:        number       // palette index
+   }
 ================================================================ */
 const CAM="{{ camera_id }}";
-let SW=1,SH=1;  // stage px dims
+let SW=1,SH=1;
 
-/* groups: { groupId, quad:[{x,y}x4] norm, prefix, ci, createdAt } */
-/* spaces: { spaceId, groupId, label, uvQuad:[{u,v}x4], order, ci } */
-let groups=[], spaces=[];
-let selected=null; // {type:'group'|'space', id}
+let lanes=[];        // LaneArea[]
+let selectedId=null; // uuid | null
+let pendingId=null;  // uuid of lane waiting to be split
 
-/* active group being drawn into / about to split */
-let pendingGroupId=null;
-
-const DRAW='draw', EDIT='edit', IDLE='idle';
+const DRAW='draw',EDIT='edit',IDLE='idle';
 let mode=IDLE;
-let drawPts=[];  // screen {x,y} during draw
+let drawPts=[];      // screen {x,y} while drawing
 
+/* ----------------------------------------------------------------
+   Drag state
+   {
+     kind:       'corner'|'divU'|'divV'|'move'
+     laneId:     string
+     cornerIdx:  number       (corner only)
+     divIdx:     number       (divU/divV only)
+     origQuad:   [{x,y}×4]   (corner/move)
+     origDivU:   number[]     (divU)
+     origDivV:   number[]     (divV)
+     sx,sy:      number       screen start position
+   }
+---------------------------------------------------------------- */
 let drag=null;
-/* drag: { type:'group'|'space', id, pick, sx, sy,
-           origQuad (norm for group), origUvQuad (for space),
-           parentQuad (norm, for space) } */
 
-let konva, layer, hLayer; // handle layer on top
+const MIN_GAP=0.012;   // minimum UV spacing between adjacent dividers
+const FINE_GAIN=0.35;  // divider drag attenuation (slow fine-tune)
+const HIT_CORNER=14;   // px
+const HIT_DIV=9;       // px
+
+let konva,layer;
 
 /* ================================================================
    INIT
@@ -410,18 +377,17 @@ let konva, layer, hLayer; // handle layer on top
 window.addEventListener('DOMContentLoaded',()=>loadBg());
 
 function initKonva(w,h){
-  SW=w; SH=h;
+  SW=w;SH=h;
   konva=new Konva.Stage({container:'k-wrap',width:SW,height:SH});
   layer=new Konva.Layer();
-  hLayer=new Konva.Layer();
-  konva.add(layer); konva.add(hLayer);
+  konva.add(layer);
   konva.on('mousedown touchstart',onDown);
   konva.on('mousemove touchmove',onMove);
   konva.on('mouseup touchend',onUp);
   document.addEventListener('keydown',e=>{
-    if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT') return;
-    if(e.key==='Delete'||e.key==='Backspace') deleteSelected();
-    if(e.key==='Escape'){ if(mode===DRAW) cancelDraw(); else deselect(); }
+    if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
+    if(e.key==='Delete'||e.key==='Backspace')deleteSelected();
+    if(e.key==='Escape'){if(mode===DRAW)cancelDraw();else deselect();}
   });
 }
 
@@ -437,13 +403,13 @@ function loadBg(){
       const img=new window.Image();
       img.onload=()=>{
         const box=document.querySelector('.canvas-body');
-        const mW=box.clientWidth-4, mH=box.clientHeight-4;
+        const mW=box.clientWidth-4,mH=box.clientHeight-4;
         const sc=Math.min(mW/img.width,mH/img.height,1);
-        SW=Math.round(img.width*sc); SH=Math.round(img.height*sc);
+        SW=Math.round(img.width*sc);SH=Math.round(img.height*sc);
         initKonva(SW,SH);
         Konva.Image.fromURL(url,ki=>{
           ki.setAttrs({x:0,y:0,width:SW,height:SH,listening:false});
-          layer.add(ki); layer.batchDraw();
+          layer.add(ki);layer.batchDraw();
         });
         loadExisting();
       };
@@ -453,11 +419,12 @@ function loadBg(){
 }
 function noBg(){
   const box=document.querySelector('.canvas-body');
-  SW=box.clientWidth-4; SH=box.clientHeight-4;
+  SW=box.clientWidth-4;SH=box.clientHeight-4;
   initKonva(SW,SH);
-  layer.add(new Konva.Text({x:SW/2,y:SH/2,text:'No snapshot — upload via FTP first',
+  layer.add(new Konva.Text({x:SW/2,y:SH/2,
+    text:'No snapshot — upload via FTP first',
     fontSize:15,fill:'#94a3b8',align:'center',offsetX:160,listening:false}));
-  layer.batchDraw(); loadExisting();
+  layer.batchDraw();loadExisting();
 }
 
 /* ================================================================
@@ -471,28 +438,28 @@ const qToS=(q)=>q.map(toS);
    DRAW MODE
 ================================================================ */
 function startDraw(){
-  if(mode===DRAW) return;
+  if(mode===DRAW)return;
   cancelDraw(false);
-  mode=DRAW; drawPts=[];
+  mode=DRAW;drawPts=[];
   deselect();
   document.getElementById('btn-draw').classList.add('active');
   document.getElementById('btn-cancel').style.display='';
   document.getElementById('b1').classList.add('on');
   document.getElementById('c1').classList.add('hl');
-  setFooter('DRAW MODE — click 4 corner points of the parking boundary',true);
+  setFooter('DRAW MODE — click 4 corner points of the lane boundary',true);
   updDS();
   konva.container().style.cursor='crosshair';
 }
 
 function cancelDraw(reset=true){
   drawPts=[];
-  if(reset) mode=IDLE;
+  if(reset)mode=IDLE;
   document.getElementById('btn-draw').classList.remove('active');
   document.getElementById('btn-cancel').style.display='none';
   document.getElementById('b1').classList.remove('on');
   document.getElementById('c1').classList.remove('hl');
-  setFooter('Click <b>Draw Area</b> then click <b>4 corner points</b>.',false);
-  updDS(); redraw();
+  setFooter('Click <b>Draw Lane</b> then click <b>4 corner points</b>.',false);
+  updDS();redraw();
   konva.container().style.cursor='';
 }
 
@@ -501,198 +468,201 @@ function updDS(){
   if(mode===DRAW){
     el.className='draw-status show';
     el.textContent=drawPts.length+' / 4 points'+(drawPts.length>0?' — click next corner':'');
-  } else { el.className='draw-status'; }
+  }else{el.className='draw-status';}
 }
 
 /* ================================================================
    EVENTS
 ================================================================ */
-function getPtr(){ return konva.getPointerPosition()||{x:0,y:0}; }
+function getPtr(){return konva.getPointerPosition()||{x:0,y:0};}
 
-function onDown(e){
+function onDown(){
   const pos=getPtr();
 
   if(mode===DRAW){
     drawPts.push({x:pos.x,y:pos.y});
     updDS();
-    if(drawPts.length===4) finishDraw();
+    if(drawPts.length===4)finishDraw();
     else redraw();
     return;
   }
 
-  /* Hit test: check spaces first (smaller targets), then groups */
   const hit=hitTest(pos);
   if(!hit){deselect();return;}
 
-  /* Select */
-  selected={type:hit.type,id:hit.id};
-
-  const quadPx=getQuadPxForId(hit.type,hit.id);
-  const pick=G.pick(pos,quadPx);
-
-  if(pick.kind==='none'){deselect();return;}
-
-  /* Set up drag */
-  if(hit.type==='group'){
-    const g=groups.find(x=>x.groupId===hit.id);
-    drag={type:'group',id:hit.id,pick,sx:pos.x,sy:pos.y,origQuad:g.quad.map(p=>({...p}))};
-  } else {
-    const sp=spaces.find(x=>x.spaceId===hit.id);
-    const grp=groups.find(x=>x.groupId===sp.groupId);
-    drag={type:'space',id:hit.id,pick,sx:pos.x,sy:pos.y,
-      origUvQuad:sp.uvQuad.map(uv=>({...uv})),
-      parentQuad:grp?grp.quad.map(p=>({...p})):null};
-  }
-
-  konva.container().style.cursor=G.cursorForPick(pick)||'grabbing';
+  selectedId=hit.laneId;
+  konva.container().style.cursor='grabbing';
   redraw();
+
+  const la=lanes.find(l=>l.uuid===hit.laneId);
+  if(!la)return;
+
+  if(hit.kind==='corner'){
+    drag={kind:'corner',laneId:hit.laneId,cornerIdx:hit.idx,
+      origQuad:la.quad.map(p=>({...p})),sx:pos.x,sy:pos.y};
+  }else if(hit.kind==='divU'){
+    drag={kind:'divU',laneId:hit.laneId,divIdx:hit.idx,
+      origDivU:[...la.dividersU],sx:pos.x,sy:pos.y};
+  }else if(hit.kind==='divV'){
+    drag={kind:'divV',laneId:hit.laneId,divIdx:hit.idx,
+      origDivV:[...la.dividersV],sx:pos.x,sy:pos.y};
+  }else if(hit.kind==='move'){
+    drag={kind:'move',laneId:hit.laneId,
+      origQuad:la.quad.map(p=>({...p})),sx:pos.x,sy:pos.y};
+  }
 }
 
-function onMove(e){
+function onMove(){
   const pos=getPtr();
 
-  /* cursor feedback when not dragging */
   if(!drag){
     const hit=hitTest(pos);
-    if(hit){
-      const qpx=getQuadPxForId(hit.type,hit.id);
-      const pk=G.pick(pos,qpx);
-      konva.container().style.cursor=G.cursorForPick(pk)||'default';
-    } else {
-      konva.container().style.cursor=mode===DRAW?'crosshair':'';
-    }
+    konva.container().style.cursor=hit?cursorForHit(hit):(mode===DRAW?'crosshair':'default');
     return;
   }
 
-  const dx=(pos.x-drag.sx)/SW, dy=(pos.y-drag.sy)/SH;
-  const pick=drag.pick;
+  const la=lanes.find(l=>l.uuid===drag.laneId);
+  if(!la)return;
 
-  if(drag.type==='group'){
-    const g=groups.find(x=>x.groupId===drag.id);
-    if(!g) return;
+  if(drag.kind==='corner'){
+    const dx=(pos.x-drag.sx)/SW,dy=(pos.y-drag.sy)/SH;
     const q=drag.origQuad.map(p=>({...p}));
-    if(pick.kind==='corner'){
-      q[pick.index]=G.clampN({x:q[pick.index].x+dx,y:q[pick.index].y+dy});
-    } else if(pick.kind==='edge'){
-      const [ia,ib]=G.edgeVerts(pick.index);
-      q[ia]=G.clampN({x:q[ia].x+dx,y:q[ia].y+dy});
-      q[ib]=G.clampN({x:q[ib].x+dx,y:q[ib].y+dy});
-    } else if(pick.kind==='move'){
-      q.forEach(p=>{p.x+=dx;p.y+=dy;});
-      q.forEach((p,i)=>q[i]=G.clampN(p));
-    }
-    g.quad=q;
-  } else {
-    const sp=spaces.find(x=>x.spaceId===drag.id);
-    if(!sp||!drag.parentQuad) return;
-    /* Convert drag delta from image space to UV delta using parent quad */
-    const startN=toN(drag.sx,drag.sy);
-    const curN=toN(pos.x,pos.y);
-    const startUV=G.imageToUv(drag.parentQuad,startN);
-    const curUV=G.imageToUv(drag.parentQuad,curN);
-    const du=curUV.u-startUV.u, dv=curUV.v-startUV.v;
-    const uvq=drag.origUvQuad.map(uv=>({...uv}));
-    if(pick.kind==='corner'){
-      uvq[pick.index]=G.clampUV({u:uvq[pick.index].u+du,v:uvq[pick.index].v+dv});
-    } else if(pick.kind==='edge'){
-      const [ia,ib]=G.edgeVerts(pick.index);
-      uvq[ia]=G.clampUV({u:uvq[ia].u+du,v:uvq[ia].v+dv});
-      uvq[ib]=G.clampUV({u:uvq[ib].u+du,v:uvq[ib].v+dv});
-    } else if(pick.kind==='move'){
-      uvq.forEach(uv=>{uv.u+=du;uv.v+=dv;});
-      uvq.forEach((uv,i)=>uvq[i]=G.clampUV(uv));
-    }
-    sp.uvQuad=uvq;
+    q[drag.cornerIdx]=G.clampN({x:q[drag.cornerIdx].x+dx,y:q[drag.cornerIdx].y+dy});
+    if(G.isConvex(q))la.quad=q;
+
+  }else if(drag.kind==='divU'){
+    /* Project current pointer onto quad u-axis; apply fine gain */
+    const startUV=G.imgToUv(la.quad,toN(drag.sx,drag.sy));
+    const curUV=G.imgToUv(la.quad,toN(pos.x,pos.y));
+    const delta=(curUV.u-startUV.u)*FINE_GAIN;
+    const d=[...drag.origDivU];
+    const k=drag.divIdx;
+    d[k]=Math.min((d[k+1]??1)-MIN_GAP,Math.max((d[k-1]??0)+MIN_GAP,d[k]+delta));
+    la.dividersU=d;
+
+  }else if(drag.kind==='divV'){
+    const startUV=G.imgToUv(la.quad,toN(drag.sx,drag.sy));
+    const curUV=G.imgToUv(la.quad,toN(pos.x,pos.y));
+    const delta=(curUV.v-startUV.v)*FINE_GAIN;
+    const d=[...drag.origDivV];
+    const k=drag.divIdx;
+    d[k]=Math.min((d[k+1]??1)-MIN_GAP,Math.max((d[k-1]??0)+MIN_GAP,d[k]+delta));
+    la.dividersV=d;
+
+  }else if(drag.kind==='move'){
+    const dx=(pos.x-drag.sx)/SW,dy=(pos.y-drag.sy)/SH;
+    la.quad=drag.origQuad.map(p=>G.clampN({x:p.x+dx,y:p.y+dy}));
   }
+
   redraw();
 }
 
 function onUp(){
-  if(drag){ drag=null; refreshList(); }
-  konva.container().style.cursor=mode===DRAW?'crosshair':'';
+  if(drag){drag=null;refreshList();}
+  konva.container().style.cursor=mode===DRAW?'crosshair':'default';
 }
 
 /* ================================================================
-   HIT TEST
+   HIT TESTING
+   Priority: corners > internal dividers > inside (move)
 ================================================================ */
 function hitTest(pos){
-  /* spaces first (smaller, should take priority) */
-  for(const sp of [...spaces].reverse()){
-    const grp=groups.find(g=>g.groupId===sp.groupId);
-    if(!grp) continue;
-    const imgQuad=G.uvQuadToImage(grp.quad,sp.uvQuad);
-    const qpx=qToS(imgQuad);
-    const pk=G.pick(pos,qpx);
-    if(pk.kind!=='none') return {type:'space',id:sp.spaceId};
-  }
-  /* then groups */
-  for(const grp of [...groups].reverse()){
-    const qpx=qToS(grp.quad);
-    const pk=G.pick(pos,qpx);
-    if(pk.kind!=='none') return {type:'group',id:grp.groupId};
+  for(const la of [...lanes].reverse()){
+    const qpx=qToS(la.quad);
+
+    /* 1) Parent corners (highest priority) */
+    for(let i=0;i<4;i++){
+      if(G.dist(pos,qpx[i])<HIT_CORNER)return{kind:'corner',laneId:la.uuid,idx:i};
+    }
+
+    /* Only continue if pointer is inside or near the lane outline */
+    if(!G.ptInPoly(pos,qpx)&&!nearBorder(pos,qpx,HIT_DIV+4))continue;
+
+    /* 2) Internal U-dividers (skip boundary indices 0 and last) */
+    if(la.dividersU){
+      for(let k=1;k<la.dividersU.length-1;k++){
+        const u=la.dividersU[k];
+        const a=toS(G.uvToImg(la.quad,u,0));
+        const b=toS(G.uvToImg(la.quad,u,1));
+        if(G.ptSegDist(pos,a,b)<HIT_DIV)return{kind:'divU',laneId:la.uuid,idx:k};
+      }
+    }
+
+    /* 3) Internal V-dividers */
+    if(la.dividersV){
+      for(let k=1;k<la.dividersV.length-1;k++){
+        const v=la.dividersV[k];
+        const a=toS(G.uvToImg(la.quad,0,v));
+        const b=toS(G.uvToImg(la.quad,1,v));
+        if(G.ptSegDist(pos,a,b)<HIT_DIV)return{kind:'divV',laneId:la.uuid,idx:k};
+      }
+    }
+
+    /* 4) Inside → move whole lane */
+    if(G.ptInPoly(pos,qpx))return{kind:'move',laneId:la.uuid};
   }
   return null;
 }
 
-function getQuadPxForId(type,id){
-  if(type==='group'){
-    const g=groups.find(x=>x.groupId===id);
-    return g?qToS(g.quad):[];
-  }
-  const sp=spaces.find(x=>x.spaceId===id);
-  if(!sp) return [];
-  const grp=groups.find(x=>x.groupId===sp.groupId);
-  if(!grp) return [];
-  return qToS(G.uvQuadToImage(grp.quad,sp.uvQuad));
+function nearBorder(pos,qpx,r){
+  for(let i=0;i<4;i++){if(G.ptSegDist(pos,qpx[i],qpx[(i+1)%4])<r)return true;}
+  return false;
+}
+
+function cursorForHit(h){
+  if(!h)return'default';
+  const corners=['nwse-resize','nesw-resize','nwse-resize','nesw-resize'];
+  if(h.kind==='corner')return corners[h.idx]||'crosshair';
+  if(h.kind==='divU')return'col-resize';
+  if(h.kind==='divV')return'row-resize';
+  if(h.kind==='move')return'move';
+  return'default';
 }
 
 /* ================================================================
-   FINISH DRAW
+   FINISH DRAW — creates a bare LaneArea (unsplit)
 ================================================================ */
 function finishDraw(){
-  const normPts=drawPts.map(p=>toN(p.x,p.y));
-  const ordered=G.orderQuad(normPts);
-  const gid=uuid();
+  const quad=G.orderQuad(drawPts.map(p=>toN(p.x,p.y)));
+  const id=uuid();
   const ci=palIdx++%PAL.length;
-  groups.push({groupId:gid,quad:ordered,prefix:'A',ci,createdAt:Date.now()});
-  pendingGroupId=gid;
-  selected={type:'group',id:gid};
+  lanes.push({uuid:id,quad,prefix:'A',start:1,cols:0,rows:0,
+    dir:'inc',gapPct:2,dividersU:[0,1],dividersV:[0,1],ci});
+  pendingId=id;
+  selectedId=id;
   document.getElementById('btn-split').disabled=false;
   document.getElementById('b2').classList.add('on');
   document.getElementById('c2').classList.add('hl');
   cancelDraw(true);
   mode=EDIT;
-  redraw(); refreshList();
-  toast('Area drawn — set spaces/rows and click Split.','ok');
+  redraw();refreshList();
+  toast('Lane drawn — set spaces/rows and click Split.','ok');
 }
 
 /* ================================================================
-   SPLIT
+   SPLIT — initialises uniform dividers on the pending lane
 ================================================================ */
-function splitArea(){
-  if(!pendingGroupId){toast('Draw an area first','err');return;}
-  const grp=groups.find(g=>g.groupId===pendingGroupId);
-  if(!grp){toast('Area not found','err');return;}
+function splitLane(){
+  if(!pendingId){toast('Draw a lane first','err');return;}
+  const la=lanes.find(l=>l.uuid===pendingId);
+  if(!la){toast('Lane not found','err');return;}
+
   const cols=Math.max(1,parseInt(document.getElementById('inp-cols').value)||5);
   const rows=Math.max(1,parseInt(document.getElementById('inp-rows').value)||1);
-  const prefix=document.getElementById('inp-prefix').value||'A';
-  const gapPct=parseFloat(document.getElementById('inp-gap').value)||2;
+  const prefix=(document.getElementById('inp-prefix').value||'A').trim()||'A';
+  const gapPct=parseFloat(document.getElementById('inp-gap').value)||0;
   const dir=document.getElementById('inp-dir').value;
+
+  /* Global naming: count lanes ALREADY split with same prefix (exclude self) */
+  const start=N.nextStart(lanes.filter(l=>l.uuid!==pendingId),prefix);
+
+  la.cols=cols;la.rows=rows;la.prefix=prefix;la.start=start;
+  la.dir=dir;la.gapPct=gapPct;
+  la.dividersU=Array.from({length:cols+1},(_,i)=>i/cols);
+  la.dividersV=Array.from({length:rows+1},(_,i)=>i/rows);
+
   const total=cols*rows;
-
-  /* global naming — find next index across ALL spaces */
-  const start=N.nextStart(spaces,prefix);
-  const labels=N.generate(prefix,start,total,dir);
-
-  const ci=grp.ci;
-  const uvGrids=G.splitUvGrid(cols,rows,gapPct);
-
-  uvGrids.forEach((uvq,i)=>{
-    spaces.push({spaceId:uuid(),groupId:pendingGroupId,label:labels[i],uvQuad:uvq,order:i+1,ci});
-  });
-
-  /* lock prefix on group */
-  grp.prefix=prefix;
+  const lbls=N.labels(la);
 
   document.getElementById('btn-split').disabled=true;
   document.getElementById('b2').classList.remove('on');
@@ -704,24 +674,29 @@ function splitArea(){
     document.getElementById('c3').classList.remove('hl');
   },2500);
 
-  pendingGroupId=null;
-  selected=null;
-  redraw(); refreshList();
-  toast('Generated '+total+' spaces ('+labels[0]+'–'+labels[total-1]+'). Drag to fine-tune.','ok');
+  pendingId=null;
+  selectedId=la.uuid;
+  redraw();refreshList();
+  toast(`Generated ${total} spaces (${lbls[0]}–${lbls[total-1]}). Drag dividers to fine-tune.`,'ok');
 }
 
 /* ================================================================
-   RENDER
+   RENDER — Milesight-style
+   For each LaneArea:
+     1. Compartment fills (derived from dividers)
+     2. Parent outline (solid, always visible)
+     3. Internal divider lines (dashed)
+     4. Labels at compartment centroids
 ================================================================ */
 function redraw(){
   layer.find('._z').forEach(n=>n.destroy());
-  hLayer.destroyChildren();
 
   /* Draw-mode preview */
   if(mode===DRAW){
     drawPts.forEach((p,i)=>{
       layer.add(new Konva.Circle({x:p.x,y:p.y,radius:i===0?7:5,
-        fill:i===0?'#f97316':'#fff',stroke:'#f97316',strokeWidth:2,listening:false,name:'_z'}));
+        fill:i===0?'#f97316':'#fff',stroke:'#f97316',strokeWidth:2,
+        listening:false,name:'_z'}));
       if(i>0){
         const pv=drawPts[i-1];
         layer.add(new Konva.Line({points:[pv.x,pv.y,p.x,p.y],
@@ -731,123 +706,134 @@ function redraw(){
     if(drawPts.length>=3){
       const last=drawPts[drawPts.length-1],first=drawPts[0];
       layer.add(new Konva.Line({points:[last.x,last.y,first.x,first.y],
-        stroke:'rgba(249,115,22,.35)',strokeWidth:1.5,dash:[4,8],listening:false,name:'_z'}));
+        stroke:'rgba(249,115,22,.35)',strokeWidth:1.5,dash:[4,8],
+        listening:false,name:'_z'}));
     }
   }
 
-  /* Render groups (parent outlines — only if they have no spaces or are selected) */
-  groups.forEach(grp=>{
-    const hasSpaces=spaces.some(s=>s.groupId===grp.groupId);
-    const isSel=selected&&selected.type==='group'&&selected.id===grp.groupId;
-    if(!isSel&&hasSpaces) return; // hide parent when spaces are drawn on top
-    const c=PAL[grp.ci%PAL.length];
-    const pts=qToS(grp.quad).flatMap(p=>[p.x,p.y]);
-    layer.add(new Konva.Line({
-      points:pts,closed:true,
-      fill:isSel?'rgba(249,115,22,.12)':'rgba(249,115,22,.06)',
-      stroke:isSel?'#f97316':'rgba(249,115,22,.4)',
-      strokeWidth:isSel?2:1.2,dash:[8,5],
-      _zid:grp.groupId,_ztype:'group',name:'_z',listening:true,
-    }));
-    const sc=qToS(grp.quad);
-    const cx=sc.reduce((s,p)=>s+p.x,0)/4, cy=sc.reduce((s,p)=>s+p.y,0)/4;
-    const lbl=new Konva.Text({x:cx,y:cy,
-      text:'[Area '+(isSel?'selected':'group')+']',
-      fontSize:11,fill:'rgba(249,115,22,.8)',align:'center',
-      listening:false,name:'_z'});
-    lbl.offsetX(lbl.width()/2); lbl.offsetY(lbl.height()/2);
-    layer.add(lbl);
+  lanes.forEach(la=>{
+    const isSel=selectedId===la.uuid;
+    const c=PAL[la.ci%PAL.length];
+    const qpx=qToS(la.quad);
+    const hasSplit=la.cols>0&&la.rows>0;
+
+    if(hasSplit){
+      const g=la.gapPct/100;
+
+      /* 1) Compartment fills */
+      for(let r=0;r<la.rows;r++){
+        const v0=la.dividersV[r],v1=la.dividersV[r+1];
+        const rg=g*0.5/Math.max(la.rows,1);
+        for(let col=0;col<la.cols;col++){
+          const u0=la.dividersU[col],u1=la.dividersU[col+1];
+          const cg=g*0.5/Math.max(la.cols,1);
+          const cellPx=qToS(G.cellQuad(la.quad,u0+cg,u1-cg,v0+rg,v1-rg));
+          layer.add(new Konva.Line({
+            points:cellPx.flatMap(p=>[p.x,p.y]),
+            closed:true,
+            fill:isSel?c.fill.replace('.18','.30'):c.fill,
+            stroke:'transparent',strokeWidth:0,
+            listening:false,name:'_z',
+          }));
+        }
+      }
+
+      /* 2) Parent outline */
+      layer.add(new Konva.Line({
+        points:qpx.flatMap(p=>[p.x,p.y]),
+        closed:true,fill:'transparent',
+        stroke:isSel?'#fff':c.stroke,
+        strokeWidth:isSel?2.5:1.8,
+        listening:false,name:'_z',
+      }));
+
+      /* 3) Internal U-divider lines */
+      for(let k=1;k<la.dividersU.length-1;k++){
+        const u=la.dividersU[k];
+        const a=toS(G.uvToImg(la.quad,u,0));
+        const b=toS(G.uvToImg(la.quad,u,1));
+        layer.add(new Konva.Line({
+          points:[a.x,a.y,b.x,b.y],
+          stroke:isSel?'rgba(255,255,255,.7)':c.stroke,
+          strokeWidth:isSel?1.5:1.0,dash:[4,3],
+          listening:false,name:'_z',
+        }));
+      }
+
+      /* 4) Internal V-divider lines */
+      for(let k=1;k<la.dividersV.length-1;k++){
+        const v=la.dividersV[k];
+        const a=toS(G.uvToImg(la.quad,0,v));
+        const b=toS(G.uvToImg(la.quad,1,v));
+        layer.add(new Konva.Line({
+          points:[a.x,a.y,b.x,b.y],
+          stroke:isSel?'rgba(255,255,255,.7)':c.stroke,
+          strokeWidth:isSel?1.5:1.0,dash:[4,3],
+          listening:false,name:'_z',
+        }));
+      }
+
+      /* 5) Compartment labels */
+      const lbls=N.labels(la);
+      let idx=0;
+      for(let r=0;r<la.rows;r++){
+        const v0=la.dividersV[r],v1=la.dividersV[r+1];
+        for(let col=0;col<la.cols;col++){
+          const u0=la.dividersU[col],u1=la.dividersU[col+1];
+          const cp=toS(G.uvToImg(la.quad,(u0+u1)/2,(v0+v1)/2));
+          const lbl=new Konva.Text({x:cp.x,y:cp.y,
+            text:lbls[idx++]||'',
+            fontSize:Math.max(9,Math.min(13,SW/90)),
+            fill:'#fff',fontStyle:'bold',align:'center',
+            shadowColor:'rgba(0,0,0,.9)',shadowBlur:3,
+            shadowOffsetX:1,shadowOffsetY:1,
+            listening:false,name:'_z'});
+          lbl.offsetX(lbl.width()/2);lbl.offsetY(lbl.height()/2);
+          layer.add(lbl);
+        }
+      }
+
+    }else{
+      /* Unsplit lane — dashed outline + prompt */
+      layer.add(new Konva.Line({
+        points:qpx.flatMap(p=>[p.x,p.y]),
+        closed:true,
+        fill:isSel?'rgba(249,115,22,.14)':'rgba(249,115,22,.06)',
+        stroke:isSel?'#f97316':'rgba(249,115,22,.45)',
+        strokeWidth:isSel?2:1.2,dash:[8,5],
+        listening:false,name:'_z',
+      }));
+      const cx=qpx.reduce((s,p)=>s+p.x,0)/4,cy=qpx.reduce((s,p)=>s+p.y,0)/4;
+      const lbl=new Konva.Text({x:cx,y:cy,
+        text:'[Set spaces & split]',fontSize:11,
+        fill:'rgba(249,115,22,.85)',align:'center',
+        listening:false,name:'_z'});
+      lbl.offsetX(lbl.width()/2);lbl.offsetY(lbl.height()/2);
+      layer.add(lbl);
+    }
   });
 
-  /* Render spaces */
-  spaces.forEach(sp=>{
-    const grp=groups.find(g=>g.groupId===sp.groupId);
-    if(!grp) return;
-    const imgQuad=G.uvQuadToImage(grp.quad,sp.uvQuad);
-    const isSel=selected&&selected.type==='space'&&selected.id===sp.spaceId;
-    const c=PAL[sp.ci%PAL.length];
-    const pts=qToS(imgQuad).flatMap(p=>[p.x,p.y]);
-    layer.add(new Konva.Line({
-      points:pts,closed:true,
-      fill:isSel?c.fill.replace('.20','.40'):c.fill,
-      stroke:isSel?'#fff':c.stroke,
-      strokeWidth:isSel?2.5:1.5,
-      _zid:sp.spaceId,_ztype:'space',name:'_z',listening:true,
-    }));
-    const sc2=qToS(imgQuad);
-    const cx=sc2.reduce((s,p)=>s+p.x,0)/4, cy=sc2.reduce((s,p)=>s+p.y,0)/4;
-    const lbl=new Konva.Text({x:cx,y:cy,text:sp.label,
-      fontSize:Math.max(10,Math.min(14,SW/80)),
-      fill:'#fff',fontStyle:'bold',align:'center',
-      shadowColor:'rgba(0,0,0,.9)',shadowBlur:3,shadowOffsetX:1,shadowOffsetY:1,
-      listening:false,name:'_z'});
-    lbl.offsetX(lbl.width()/2); lbl.offsetY(lbl.height()/2);
-    layer.add(lbl);
-  });
-
-  layer.batchDraw(); hLayer.batchDraw();
+  layer.batchDraw();
 }
 
 /* ================================================================
    SELECTION / ACTIONS
 ================================================================ */
-function deselect(){ selected=null; redraw(); refreshList(); }
+function deselect(){selectedId=null;redraw();refreshList();}
 
 function deleteSelected(){
-  if(!selected){toast('Select a zone first','err');return;}
-  if(selected.type==='group'){
-    groups=groups.filter(g=>g.groupId!==selected.id);
-    spaces=spaces.filter(s=>s.groupId!==selected.id);
-    if(pendingGroupId===selected.id){ pendingGroupId=null; document.getElementById('btn-split').disabled=true; }
-  } else {
-    spaces=spaces.filter(s=>s.spaceId!==selected.id);
-  }
-  selected=null; redraw(); refreshList();
+  if(!selectedId){toast('Select a lane first','err');return;}
+  lanes=lanes.filter(l=>l.uuid!==selectedId);
+  if(pendingId===selectedId){pendingId=null;document.getElementById('btn-split').disabled=true;}
+  selectedId=null;
+  redraw();refreshList();
 }
 
-function duplicateSelected(){
-  if(!selected){toast('Select a zone first','err');return;}
-  if(selected.type==='space'){
-    const sp=spaces.find(s=>s.spaceId===selected.id);
-    if(!sp) return;
-    const grp=groups.find(g=>g.groupId===sp.groupId);
-    if(!grp) return;
-    const newLabel=N.format(grp.prefix,N.nextStart(spaces,grp.prefix));
-    const off=0.02;
-    const newUvq=sp.uvQuad.map(uv=>G.clampUV({u:uv.u+off,v:uv.v+off}));
-    const newSp={spaceId:uuid(),groupId:sp.groupId,label:newLabel,uvQuad:newUvq,order:spaces.length+1,ci:sp.ci};
-    spaces.push(newSp);
-    selected={type:'space',id:newSp.spaceId};
-    redraw(); refreshList();
-    toast('Duplicated → '+newLabel,'ok');
-  } else {
-    toast('Select a space to duplicate (not the area group)','err');
-  }
-}
-
-function clearAll(){
-  groups=[]; spaces=[]; selected=null; pendingGroupId=null;
+/* Local canvas clear — does NOT call server */
+function clearCanvas(){
+  lanes=[];selectedId=null;pendingId=null;
   document.getElementById('btn-split').disabled=true;
-  cancelDraw(true); redraw(); refreshList();
-}
-
-function showClearModal(){
-  document.getElementById('modal-cam-label').textContent = CAM;
-  document.getElementById('clear-modal').classList.remove('hidden');
-}
-function hideClearModal(){ document.getElementById('clear-modal').classList.add('hidden'); }
-async function confirmClearAllZones(){
-  hideClearModal();
-  try{
-    const r=await fetch('/admin/zones/bulk',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({camera_id:CAM,zones:[],clear_existing:true}),
-    });
-    const d=await r.json();
-    if(!r.ok){toast(d.error||'Clear failed','err');return;}
-    clearAll();
-    toast('All zones cleared ✓','ok');
-  }catch(e){toast('Network error: '+e.message,'err');}
+  cancelDraw(true);redraw();refreshList();
 }
 
 /* ================================================================
@@ -855,87 +841,230 @@ async function confirmClearAllZones(){
 ================================================================ */
 function refreshList(){
   const el=document.getElementById('zlist');
-  document.getElementById('gcnt').textContent=groups.length;
-  document.getElementById('scnt').textContent=spaces.length;
+  const totalSpaces=lanes.reduce((s,l)=>s+Math.max(0,l.cols*l.rows),0);
+  document.getElementById('gcnt').textContent=lanes.length;
+  document.getElementById('scnt').textContent=totalSpaces;
+
   const items=[];
-  groups.forEach(grp=>{
-    const isSel=selected&&selected.type==='group'&&selected.id===grp.groupId;
-    items.push(`<div class="z-item${isSel?' sel':''}" onclick="selById('group','${grp.groupId}')">
-      <div><span class="nm">Area</span><span class="mt">${spaces.filter(s=>s.groupId===grp.groupId).length} spaces</span></div>
-      <button class="del" onclick="event.stopPropagation();delById('group','${grp.groupId}')">&times;</button></div>`);
-    spaces.filter(s=>s.groupId===grp.groupId).forEach(sp=>{
-      const isSel2=selected&&selected.type==='space'&&selected.id===sp.spaceId;
-      items.push(`<div class="z-item${isSel2?' sel':''}" style="padding-left:20px" onclick="selById('space','${sp.spaceId}')">
-        <div><span class="nm">${sp.label}</span><span class="mt">space</span></div>
-        <button class="del" onclick="event.stopPropagation();delById('space','${sp.spaceId}')">&times;</button></div>`);
-    });
+  lanes.forEach(la=>{
+    const isSel=selectedId===la.uuid;
+    const total=la.cols*la.rows;
+    const lbls=total>0?N.labels(la):[];
+    const range=lbls.length?` ${lbls[0]}–${lbls[lbls.length-1]}`:'';
+    items.push(`<div class="z-item${isSel?' sel':''}" onclick="selById('${la.uuid}')">
+      <div>
+        <span class="nm">${la.prefix||'?'} Lane</span>
+        <span class="mt">${total?total+' spaces'+range:'unsplit'}</span>
+      </div>
+      <button class="del" onclick="event.stopPropagation();delById('${la.uuid}')">&times;</button>
+    </div>`);
   });
-  el.innerHTML=items.length?items.join(''):'<div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div>';
+  el.innerHTML=items.length?items.join(''):'<div style="color:var(--text-secondary);font-size:12px;">No lanes yet.</div>';
 }
 
-function selById(type,id){
-  selected={type,id:id}; redraw(); refreshList();
-  document.querySelectorAll('.z-item').forEach(el=>el.scrollIntoView&&el.classList.contains('sel')&&el.scrollIntoView({block:'nearest'}));
-}
-function delById(type,id){
-  if(type==='group'){ groups=groups.filter(g=>g.groupId!==id); spaces=spaces.filter(s=>s.groupId!==id); }
-  else { spaces=spaces.filter(s=>s.spaceId!==id); }
-  if(selected&&selected.id===id) selected=null;
-  redraw(); refreshList();
+function selById(id){selectedId=id;redraw();refreshList();}
+function delById(id){
+  lanes=lanes.filter(l=>l.uuid!==id);
+  if(pendingId===id){pendingId=null;document.getElementById('btn-split').disabled=true;}
+  if(selectedId===id)selectedId=null;
+  redraw();refreshList();
 }
 
 /* ================================================================
-   SAVE / LOAD
+   CONFIRM MODAL — shared for 'clear' and 'replace'
 ================================================================ */
-async function saveZones(clearExisting){
-  const toSave=spaces;
-  if(!toSave.length){toast('No spaces to save','err');return;}
+let confirmMode=null;  // 'clear' | 'replace'
+let modalLoading=false;
 
-  /* Build payload: each space stored as 4-point polygon in % coords */
-  const payload=toSave.map(sp=>{
-    const grp=groups.find(g=>g.groupId===sp.groupId);
-    let pts;
-    if(grp){
-      pts=G.uvQuadToImage(grp.quad,sp.uvQuad).map(p=>[+(p.x*100).toFixed(4),+(p.y*100).toFixed(4)]);
-    } else {
-      pts=[[0,0],[100,0],[100,100],[0,100]];
+function openModal(modeStr){
+  confirmMode=modeStr;
+  const title=document.getElementById('modal-title');
+  const body=document.getElementById('modal-body');
+  const confirmBtn=document.getElementById('modal-confirm');
+  const spaceCount=lanes.reduce((s,l)=>s+Math.max(0,l.cols*l.rows),0);
+
+  if(modeStr==='clear'){
+    title.textContent='Delete All Zones?';
+    body.innerHTML=`This will delete <strong>ALL saved zones</strong> for camera <strong>${CAM}</strong>.<br>This action <strong style="color:var(--red)">cannot be undone</strong>.`;
+    confirmBtn.textContent='Delete All';
+    confirmBtn.className='btn btn-red';
+  }else{
+    title.textContent='Replace All Zones?';
+    body.innerHTML=`This will <strong>delete existing zones</strong> then save the current canvas (<strong>${spaceCount} spaces</strong>) for camera <strong>${CAM}</strong>.<br>Continue?`;
+    confirmBtn.textContent='Replace';
+    confirmBtn.className='btn btn-orange';
+  }
+
+  setModalLoading(false);
+  document.getElementById('confirm-modal').classList.remove('hidden');
+}
+
+function closeModal(){
+  if(modalLoading)return;
+  document.getElementById('confirm-modal').classList.add('hidden');
+  confirmMode=null;
+}
+
+function setModalLoading(on){
+  modalLoading=on;
+  document.getElementById('modal-confirm').disabled=on;
+  document.getElementById('modal-cancel').disabled=on;
+  if(on){
+    document.getElementById('modal-confirm').textContent='Working…';
+  }else{
+    document.getElementById('modal-confirm').textContent=
+      confirmMode==='clear'?'Delete All':'Replace';
+  }
+}
+
+async function runModalAction(){
+  if(!confirmMode)return;
+  setModalLoading(true);
+  try{
+    if(confirmMode==='clear'){
+      /* Delete server zones, clear canvas — do NOT save */
+      await serverDeleteAll();
+      clearCanvas();
+      closeModal();
+      toast('All zones deleted','ok');
+
+    }else if(confirmMode==='replace'){
+      /* Delete server zones, save canvas, reload */
+      await serverDeleteAll();
+      const saved=await serverSave();
+      clearCanvas();
+      await loadExisting();
+      closeModal();
+      toast(`Replaced and saved ${saved} zones`,'ok');
     }
-    return {zone_id:sp.label, name:sp.label, capacity_units:1, polygon_json:JSON.stringify(pts)};
-  });
+  }catch(e){
+    toast('Error: '+e.message,'err');
+    setModalLoading(false);
+  }
+}
 
+/* ================================================================
+   SERVER HELPERS
+================================================================ */
+async function serverDeleteAll(){
+  const r=await fetch('/admin/zones/delete-all',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({camera_id:CAM}),
+  });
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.error||'Delete failed');
+}
+
+async function serverSave(){
+  const payload=buildPayload();
+  if(!payload.length)return 0;
+  const r=await fetch('/admin/zones/bulk',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({camera_id:CAM,zones:payload,clear_existing:false}),
+  });
+  const d=await r.json();
+  if(!r.ok)throw new Error(d.error||'Save failed');
+  return d.saved||payload.length;
+}
+
+/* Materialise every compartment into polygon_json (% coords) */
+function buildPayload(){
+  const payload=[];
+  lanes.forEach(la=>{
+    if(la.cols<1||la.rows<1)return;
+    const g=la.gapPct/100;
+    const lbls=N.labels(la);
+    let idx=0;
+    for(let r=0;r<la.rows;r++){
+      const v0=la.dividersV[r],v1=la.dividersV[r+1];
+      const rg=g*0.5/Math.max(la.rows,1);
+      for(let col=0;col<la.cols;col++){
+        const u0=la.dividersU[col],u1=la.dividersU[col+1];
+        const cg=g*0.5/Math.max(la.cols,1);
+        const pts=G.cellQuad(la.quad,u0+cg,u1-cg,v0+rg,v1-rg)
+          .map(p=>[+(p.x*100).toFixed(4),+(p.y*100).toFixed(4)]);
+        const lbl=lbls[idx++]||`Z${idx}`;
+        payload.push({zone_id:lbl,name:lbl,capacity_units:1,polygon_json:JSON.stringify(pts)});
+      }
+    }
+  });
+  return payload;
+}
+
+/* ================================================================
+   SAVE ALL (explicit button — no confirmation needed)
+================================================================ */
+async function saveZones(){
+  const payload=buildPayload();
+  if(!payload.length){toast('No spaces to save','err');return;}
+  setActionBtns(true);
   try{
     const r=await fetch('/admin/zones/bulk',{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({camera_id:CAM,zones:payload,clear_existing:clearExisting}),
+      body:JSON.stringify({camera_id:CAM,zones:payload,clear_existing:false}),
     });
     const d=await r.json();
     if(!r.ok){toast(d.error||'Save failed','err');return;}
-    toast('Saved '+d.saved+' zones ✓','ok');
+    toast(`Saved ${d.saved} zones ✓`,'ok');
   }catch(e){toast('Network error: '+e.message,'err');}
+  finally{setActionBtns(false);}
 }
 
+function setActionBtns(disabled){
+  ['btn-save','btn-clear','btn-replace'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el)el.disabled=disabled;
+  });
+}
+
+/* ================================================================
+   LOAD EXISTING (on page load)
+   Re-constructs synthetic LaneAreas grouped by label prefix.
+================================================================ */
 async function loadExisting(){
   try{
     const r=await fetch('/admin/zones.json?camera_id='+CAM);
     const d=await r.json();
-    if(!d.zones?.length) return;
-    const gid=uuid();
-    const ci=palIdx++%PAL.length;
-    /* Create a synthetic group covering the full image */
-    const syntheticQuad=[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
-    groups.push({groupId:gid,quad:syntheticQuad,prefix:'X',ci,createdAt:Date.now()});
-    d.zones.forEach((z,i)=>{
-      try{
-        const pts=JSON.parse(z.polygon_json||'[]');
-        if(pts.length<3) return;
-        const quad=pts.slice(0,4).map(p=>({x:p[0]/100,y:p[1]/100}));
-        while(quad.length<4) quad.push({...quad[quad.length-1]});
-        /* Convert image-space quad to UV within synthetic (full-frame) group */
-        const uvq=quad.map(p=>G.imageToUv(syntheticQuad,p));
-        spaces.push({spaceId:uuid(),groupId:gid,label:z.zone_id,uvQuad:uvq,order:i+1,ci:i%PAL.length});
-      }catch(_){}
+    if(!d.zones?.length)return;
+
+    /* Group zones by letter prefix */
+    const byPrefix={};
+    d.zones.forEach(z=>{
+      const m=z.zone_id.match(/^([A-Za-z]+)(\d+)$/);
+      const pfx=m?m[1]:'X';
+      if(!byPrefix[pfx])byPrefix[pfx]=[];
+      byPrefix[pfx].push(z);
     });
-    redraw(); refreshList();
+
+    Object.entries(byPrefix).forEach(([pfx,zs])=>{
+      /* Approximate lane quad from bounding box of all polygon points */
+      const allPts=[];
+      zs.forEach(z=>{
+        try{JSON.parse(z.polygon_json||'[]').forEach(p=>allPts.push({x:p[0]/100,y:p[1]/100}));}
+        catch(_){}
+      });
+      let quad;
+      if(allPts.length>=4){
+        const xs=allPts.map(p=>p.x),ys=allPts.map(p=>p.y);
+        const xmin=Math.min(...xs),xmax=Math.max(...xs);
+        const ymin=Math.min(...ys),ymax=Math.max(...ys);
+        quad=[{x:xmin,y:ymin},{x:xmax,y:ymin},{x:xmax,y:ymax},{x:xmin,y:ymax}];
+      }else{
+        quad=[{x:0,y:0},{x:1,y:0},{x:1,y:1},{x:0,y:1}];
+      }
+
+      const nums=zs.map(z=>{const m=z.zone_id.match(/(\d+)$/);return m?parseInt(m[1]):1;});
+      const start=Math.min(...nums);
+      const n=zs.length;
+      const ci=palIdx++%PAL.length;
+
+      lanes.push({uuid:uuid(),quad,prefix:pfx,start,cols:n,rows:1,
+        dir:'inc',gapPct:0,
+        dividersU:Array.from({length:n+1},(_,i)=>i/n),
+        dividersV:[0,1],ci});
+    });
+
+    redraw();refreshList();
     toast('Loaded '+d.zones.length+' existing zones','ok');
   }catch(_){}
 }
@@ -951,8 +1080,8 @@ function setFooter(html,active){
 function toast(msg,type){
   document.querySelectorAll('.toast').forEach(t=>t.remove());
   const t=document.createElement('div');
-  t.className='toast toast-'+type; t.textContent=msg;
-  document.body.appendChild(t); setTimeout(()=>t.remove(),3500);
+  t.className='toast toast-'+type;t.textContent=msg;
+  document.body.appendChild(t);setTimeout(()=>t.remove(),3500);
 }
 </script>
 </body>
