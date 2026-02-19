@@ -180,7 +180,7 @@ FROM projects WHERE name = 'POC_Project_01'
 ON CONFLICT DO NOTHING;
 
 INSERT INTO cameras (site_id, camera_id, name, brand, model, ingest_protocol, ftp_username, ftp_password_hash)
-SELECT id, 'CAM001', 'Dahua Parking Entrance', 'dahua', 'IPC-HFW7442H-Z4FR', 'ftp', 'cam001', '$2b$12$PLACEHOLDER_HASH'
+SELECT id, 'CAM001', 'Dahua Parking Entrance', 'dahua', 'IPC-HFW7442H-Z4FR', 'ftp', 'cam001', 'password123'
 FROM sites WHERE name = 'POC_Site_01'
 ON CONFLICT DO NOTHING;
 
