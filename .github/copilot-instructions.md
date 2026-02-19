@@ -49,17 +49,20 @@ Done via `POST /admin/cameras` (no code changes needed). The API:
 ## Dev Workflows
 ```bash
 # Start all services (GCP VM)
-docker-compose up -d
+docker compose up -d
 
 # Initial deployment on new GCP VM
 ./deploy.sh YOUR_STATIC_IP
 
+# Deploy code changes from local → server (templates baked into image — MUST rebuild)
+ssh campark-server "cd ~/CamPark && git pull origin main && docker compose up -d --build --no-deps api"
+
 # Validate FTP ingest end-to-end (must pass before building)
-docker-compose up -d ftp
+docker compose up -d ftp
 bash tests/ftp_test.sh
 
 # View worker logs
-docker-compose logs -f worker
+docker compose logs -f worker
 
 # Force-sync FTP users after DB change
 curl -X POST http://localhost:8000/admin/ftp-sync
