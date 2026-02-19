@@ -166,6 +166,54 @@
       padding: 8px;
       font-size: 12px;
     }
+
+    /* FTP Details panel */
+    .ftp-details {
+      display: none;
+      margin-top: 12px;
+      background: var(--bg-dark);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 12px;
+    }
+    .ftp-details.show { display: block; }
+    .ftp-details h4 {
+      font-size: 12px;
+      color: var(--accent-blue);
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .ftp-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 12px;
+    }
+    .ftp-row:last-child { border-bottom: none; }
+    .ftp-row .lbl { color: var(--text-secondary); }
+    .ftp-row .val {
+      color: var(--text-primary);
+      font-family: 'Courier New', monospace;
+      font-weight: 600;
+      user-select: all;
+    }
+    .ftp-row .copy-btn {
+      background: var(--bg-hover);
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 10px;
+      cursor: pointer;
+      margin-left: 6px;
+    }
+    .ftp-row .copy-btn:hover {
+      color: var(--text-primary);
+      border-color: var(--accent-blue);
+    }
     
     /* Modal */
     .modal-backdrop {
@@ -358,9 +406,14 @@
       document.getElementById('http-fields').style.display = proto === 'http_snap' ? 'block' : 'none';
     }
 
+    let ftpServer = '', ftpPort = 21, ftpRemoteDir = 'incoming';
+
     async function loadCameras() {
       const resp = await fetch('/admin/cameras-detail.json');
       const data = await resp.json();
+      ftpServer = data.ftp_server || '';
+      ftpPort = data.ftp_port || 21;
+      ftpRemoteDir = data.ftp_remote_dir || 'incoming';
       const grid = document.getElementById('camera-grid');
       
       const protocolLabel = {ftp:'FTP', lapi_ws:'LAPI WS', rtsp:'RTSP', http_snap:'HTTP', onvif:'ONVIF'};
@@ -395,9 +448,20 @@
               </div>
             </div>
             <div class="actions">
-              <button class="btn btn-secondary" onclick="viewSnapshot('${cam.camera_id}')">View Snapshot</button>
+              <button class="btn btn-secondary" onclick="toggleDetails('${cam.camera_id}')">&#9432; Details</button>
               <button class="btn" onclick="editZones('${cam.camera_id}')">Edit Zones</button>
               <button class="btn" style="background:var(--status-red);flex:0;padding:8px 12px;" onclick="confirmDelete('${cam.camera_id}','${(cam.name||cam.camera_id).replace(/'/g,"\\'")}')" title="Delete camera">&#x1F5D1;</button>
+            </div>
+            <div class="ftp-details" id="details-${cam.camera_id}">
+              <h4>${cam.ingest_protocol === 'ftp' ? 'FTP Connection Details — enter these in your camera' : 'Connection Details'}</h4>
+              ${cam.ingest_protocol === 'ftp' ? `
+              <div class="ftp-row"><span class="lbl">Server</span><span><span class="val">${ftpServer}</span><button class="copy-btn" onclick="copyText('${ftpServer}')">Copy</button></span></div>
+              <div class="ftp-row"><span class="lbl">Port</span><span><span class="val">${ftpPort}</span></span></div>
+              <div class="ftp-row"><span class="lbl">Username</span><span><span class="val">${cam.ftp_username || '-'}</span><button class="copy-btn" onclick="copyText('${cam.ftp_username || ''}')">Copy</button></span></div>
+              <div class="ftp-row"><span class="lbl">Password</span><span><span class="val">${cam.ftp_password || '-'}</span><button class="copy-btn" onclick="copyText('${cam.ftp_password || ''}')">Copy</button></span></div>
+              <div class="ftp-row"><span class="lbl">Remote Dir</span><span><span class="val">${ftpRemoteDir}</span><button class="copy-btn" onclick="copyText('${ftpRemoteDir}')">Copy</button></span></div>
+              <div class="ftp-row"><span class="lbl">Passive Ports</span><span><span class="val">30000-30049</span></span></div>
+              ` : `<div class="ftp-row"><span class="lbl">Protocol</span><span class="val">${(protocolLabel[cam.ingest_protocol] || cam.ingest_protocol || 'FTP').toUpperCase()}</span></div>`}
             </div>
           </div>
         </div>
@@ -508,8 +572,20 @@
       loadCameras();
     }
     
-    function viewSnapshot(cameraId) {
-      window.open(`/api/v1/cameras/${cameraId}/snapshot-latest`, '_blank');
+    function toggleDetails(cameraId) {
+      const el = document.getElementById('details-' + cameraId);
+      if (el) el.classList.toggle('show');
+    }
+
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        // Brief visual feedback
+        const btn = event.target;
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.color = '#22c55e';
+        setTimeout(() => { btn.textContent = orig; btn.style.color = ''; }, 1200);
+      });
     }
     
     function editZones(cameraId) {

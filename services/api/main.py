@@ -1148,13 +1148,15 @@ def admin_cameras_detail_json():
                 "ingest_protocol": cam.ingest_protocol or "ftp",
                 "status": cam.status or "UNKNOWN",
                 "ftp_username": cam.ftp_username,
+                "ftp_password": cam.ftp_password_hash,
                 "last_seen_at": to_iso(cam.last_seen_at),
                 "last_inference": to_iso(latest_snap.processed_at) if latest_snap else None,
                 "snapshots_1h": snaps_1h,
                 "zone_count": zone_count,
                 "has_snapshot": latest_snap is not None,
             })
-        return jsonify({"cameras": result})
+        ext_ip = os.environ.get("EXTERNAL_IP", os.environ.get("FTP_PUBLICHOST", "<server-ip>"))
+        return jsonify({"cameras": result, "ftp_server": ext_ip, "ftp_port": 21, "ftp_remote_dir": "incoming"})
     finally:
         session.close()
 
