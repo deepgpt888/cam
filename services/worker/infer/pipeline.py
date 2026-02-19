@@ -5,7 +5,9 @@ import os
 import shutil
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
+from typing import Dict, Optional, Tuple
+import numpy as np
 from PIL import Image, UnidentifiedImageError
 
 from db import Detection, Snapshot, Zone, ZoneEvent, ZoneState
@@ -15,6 +17,20 @@ from yolo_processor import YoloProcessor
 log = logging.getLogger(__name__)
 
 VALID_CLASSES = {"car", "truck", "motorcycle", "bicycle"}
+
+# Operating hours (local time, 24h).  Override via env:
+#   OPERATING_HOURS_START=6  OPERATING_HOURS_END=18
+OPERATING_START = int(os.getenv("OPERATING_HOURS_START", "6"))
+OPERATING_END   = int(os.getenv("OPERATING_HOURS_END",   "18"))
+
+# Perceptual-diff threshold (0–255 average pixel delta).
+# Frames more similar than this are treated as "no change" and
+# skip inference entirely — only heartbeat is updated.
+# 0 = always infer (disable smart-skip).
+SCENE_DIFF_THRESHOLD = float(os.getenv("SCENE_DIFF_THRESHOLD", "6.0"))
+
+# Thumbnail size used for perceptual diff (smaller = faster, 32 is plenty)
+_THUMB = (32, 32)
 
 
 class InferencePipeline:
@@ -37,6 +53,35 @@ class InferencePipeline:
                 confidence=yolo_confidence,
                 overlap_threshold=overlap_threshold,
             )
+        # Per-camera perceptual fingerprints: camera_id -> np.ndarray (32x32 uint8)
+        self._last_thumb: Dict[int, np.ndarray] = {}
+
+    # ------------------------------------------------------------------
+    # Perceptual diff helpers
+    # ------------------------------------------------------------------
+
+    def _thumb_of(self, image: Image.Image) -> np.ndarray:
+        """Downsample image to a small grayscale thumbnail for fast comparison."""
+        return np.array(image.resize(_THUMB, Image.BILINEAR).convert("L"), dtype=np.float32)
+
+    def _scene_changed(self, camera_id: int, thumb: np.ndarray) -> Tuple[bool, float]:
+        """Return (changed, mean_pixel_delta). Updates stored thumbnail on change."""
+        if SCENE_DIFF_THRESHOLD <= 0:
+            return True, 255.0  # disabled — always process
+        prev = self._last_thumb.get(camera_id)
+        if prev is None:
+            # First image ever for this camera — always process
+            self._last_thumb[camera_id] = thumb
+            return True, 255.0
+        diff = float(np.mean(np.abs(thumb - prev)))
+        if diff >= SCENE_DIFF_THRESHOLD:
+            self._last_thumb[camera_id] = thumb
+            return True, diff
+        return False, diff
+
+    # ------------------------------------------------------------------
+    # Main entry point
+    # ------------------------------------------------------------------
 
     def process_snapshot(self, session, camera, file_path):
         if not _file_is_stable(file_path):
@@ -51,6 +96,19 @@ class InferencePipeline:
             return
 
         now = datetime.utcnow()
+
+        # ---- Operating hours gate ----
+        local_hour = datetime.now().hour  # server local time
+        in_hours = OPERATING_START <= local_hour < OPERATING_END
+        if not in_hours:
+            # Outside operating window — record heartbeat, skip inference
+            camera.last_seen_at = now
+            camera.status = "ONLINE"
+            _discard(file_path)  # remove file, nothing to store
+            log.debug("[%s] Outside operating hours (%02d:00) — heartbeat only",
+                      camera.camera_id, local_hour)
+            return
+
         try:
             image = Image.open(file_path)
             image.verify()
@@ -60,6 +118,21 @@ class InferencePipeline:
             _quarantine(file_path)
             return
         width, height = image.size
+
+        # ---- Perceptual diff — smart skip ----
+        thumb = self._thumb_of(image)
+        changed, delta = self._scene_changed(camera.id, thumb)
+        if not changed:
+            # Scene is static — update heartbeat only, discard image
+            camera.last_seen_at = now
+            camera.status = "ONLINE"
+            _discard(file_path)
+            log.debug("[%s] Scene unchanged (diff=%.2f < %.2f) — heartbeat only",
+                      camera.camera_id, delta, SCENE_DIFF_THRESHOLD)
+            return
+
+        log.info("[%s] Scene changed (diff=%.2f) — running inference",
+                 camera.camera_id, delta)
 
         date_folder = now.strftime("%Y%m%d")
         dest_dir = os.path.join(self.image_root, camera.camera_id, date_folder)
@@ -158,6 +231,14 @@ class InferencePipeline:
                 session.add(det_row)
 
         snapshot.processed_at = datetime.utcnow()
+
+
+def _discard(file_path):
+    """Remove a file quietly (used for out-of-hours / unchanged frames)."""
+    try:
+        os.remove(file_path)
+    except OSError:
+        pass
 
 
 def _sha256_file(path):
