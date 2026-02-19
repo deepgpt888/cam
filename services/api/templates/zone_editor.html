@@ -67,6 +67,16 @@
     .toast-ok{background:var(--green);color:#fff;}
     .toast-err{background:var(--red);color:#fff;}
     @keyframes fadeUp{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    /* ---- clear modal ---- */
+    .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:10000;backdrop-filter:blur(3px);}
+    .modal-backdrop.hidden{display:none;}
+    .modal-box{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px 28px 22px;max-width:400px;width:90%;box-shadow:0 24px 64px rgba(0,0,0,.6);}
+    .modal-icon{width:48px;height:48px;border-radius:50%;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);display:flex;align-items:center;justify-content:center;font-size:22px;margin:0 auto 16px;}
+    .modal-title{font-size:16px;font-weight:700;text-align:center;margin-bottom:10px;}
+    .modal-body{font-size:13px;color:var(--text-secondary);text-align:center;line-height:1.6;margin-bottom:22px;}
+    .modal-body strong{color:var(--text-primary);}
+    .modal-actions{display:flex;gap:10px;}
+    .modal-actions .btn{margin-bottom:0;flex:1;}
   </style>
 </head>
 <body>
@@ -145,8 +155,24 @@
     <div class="card">
       <div class="card-hdr">&#128190; Save</div>
       <button class="btn btn-green" onclick="saveZones(false)">Save All Zones</button>
-      <button class="btn btn-red" onclick="saveZones(true)">Replace All (Clear + Save)</button>
-      <p class="hint"><b>Save All</b> adds/updates. <b>Replace All</b> wipes existing zones for this camera first.</p>
+      <button class="btn btn-red" onclick="showClearModal()">Clear All Zones</button>
+      <p class="hint"><b>Save All</b> adds/updates the canvas zones to the server. <b>Clear All</b> permanently deletes all saved zones for this camera.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CLEAR ALL MODAL ===== -->
+<div id="clear-modal" class="modal-backdrop hidden" onclick="if(event.target===this)hideClearModal()">
+  <div class="modal-box">
+    <div class="modal-icon">&#9888;</div>
+    <div class="modal-title">Delete All Zones?</div>
+    <div class="modal-body">
+      This will permanently delete <strong>all saved zones</strong> for camera <strong id="modal-cam-label"></strong>.<br>
+      This action <strong style="color:var(--red)">cannot be undone</strong>.
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="hideClearModal()">Cancel</button>
+      <button class="btn btn-red" onclick="confirmClearAllZones()">Yes, Delete All</button>
     </div>
   </div>
 </div>
@@ -800,10 +826,28 @@ function duplicateSelected(){
 }
 
 function clearAll(){
-  if((groups.length||spaces.length)&&!confirm('Clear ALL zones?')) return;
   groups=[]; spaces=[]; selected=null; pendingGroupId=null;
   document.getElementById('btn-split').disabled=true;
   cancelDraw(true); redraw(); refreshList();
+}
+
+function showClearModal(){
+  document.getElementById('modal-cam-label').textContent = CAM;
+  document.getElementById('clear-modal').classList.remove('hidden');
+}
+function hideClearModal(){ document.getElementById('clear-modal').classList.add('hidden'); }
+async function confirmClearAllZones(){
+  hideClearModal();
+  try{
+    const r=await fetch('/admin/zones/bulk',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({camera_id:CAM,zones:[],clear_existing:true}),
+    });
+    const d=await r.json();
+    if(!r.ok){toast(d.error||'Clear failed','err');return;}
+    clearAll();
+    toast('All zones cleared ✓','ok');
+  }catch(e){toast('Network error: '+e.message,'err');}
 }
 
 /* ================================================================
@@ -846,7 +890,6 @@ function delById(type,id){
 async function saveZones(clearExisting){
   const toSave=spaces;
   if(!toSave.length){toast('No spaces to save','err');return;}
-  if(clearExisting&&!confirm('Delete ALL existing zones for this camera?')) return;
 
   /* Build payload: each space stored as 4-point polygon in % coords */
   const payload=toSave.map(sp=>{
