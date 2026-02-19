@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>CamPark - Zone Editor</title>
+  <title>CamPark — Zone Editor</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.0/fabric.min.js"></script>
   <style>
     :root {
@@ -12,298 +12,140 @@
       --bg-hover: #334155;
       --text-primary: #f1f5f9;
       --text-secondary: #94a3b8;
-      --accent-blue: #3b82f6;
-      --status-green: #22c55e;
-      --status-yellow: #eab308;
-      --status-red: #ef4444;
-      --border-color: #334155;
-      --accent-orange: #f97316;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --yellow: #eab308;
+      --red: #ef4444;
+      --orange: #f97316;
+      --border: #334155;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg-dark);
-      color: var(--text-primary);
-      min-height: 100vh;
+      background: var(--bg-dark); color: var(--text-primary);
     }
+
+    /* ---- Nav ---- */
     .navbar {
-      background: var(--bg-card);
-      border-bottom: 1px solid var(--border-color);
-      padding: 12px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
+      background: var(--bg-card); border-bottom: 1px solid var(--border);
+      padding: 10px 20px; display: flex; align-items: center; justify-content: space-between;
     }
-    .navbar h1 { font-size: 20px; font-weight: 600; }
-    .nav-links { display: flex; gap: 8px; }
+    .navbar h1 { font-size: 18px; }
+    .nav-links { display: flex; gap: 4px; }
     .nav-links a {
-      color: var(--text-secondary);
-      text-decoration: none;
-      padding: 8px 16px;
-      border-radius: 6px;
-      font-size: 14px;
-      transition: all 0.2s;
+      color: var(--text-secondary); text-decoration: none; padding: 6px 14px;
+      border-radius: 6px; font-size: 13px; transition: .15s;
     }
-    .nav-links a:hover, .nav-links a.active {
-      background: var(--bg-hover);
-      color: var(--text-primary);
+    .nav-links a:hover, .nav-links a.active { background: var(--bg-hover); color: var(--text-primary); }
+
+    /* ---- Layout ---- */
+    .editor { display: grid; grid-template-columns: 1fr 340px; gap: 16px; padding: 16px; height: calc(100vh - 50px); }
+    @media (max-width: 960px) { .editor { grid-template-columns: 1fr; } }
+
+    /* ---- Canvas Panel ---- */
+    .canvas-panel {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
+      display: flex; flex-direction: column; overflow: hidden;
     }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      padding: 24px;
+    .canvas-bar {
+      display: flex; align-items: center; gap: 6px; padding: 8px 12px;
+      border-bottom: 1px solid var(--border); flex-wrap: wrap;
     }
-    .page-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 24px;
+    .canvas-bar .cam-label { font-size: 13px; font-weight: 600; color: var(--text-secondary); margin-right: auto; }
+    .tb {
+      padding: 5px 12px; border: 1px solid var(--border); border-radius: 5px;
+      background: var(--bg-hover); color: var(--text-primary); font-size: 12px;
+      cursor: pointer; transition: .15s; user-select: none;
     }
-    .page-header h2 { font-size: 24px; font-weight: 600; }
-    .page-header .sub { font-size: 14px; color: var(--text-secondary); margin-top: 4px; }
-    
-    .editor-layout {
-      display: grid;
-      grid-template-columns: 1fr 360px;
-      gap: 24px;
+    .tb:hover { border-color: var(--accent); color: #fff; }
+    .tb.active { background: var(--orange); border-color: var(--orange); color: #fff; box-shadow: 0 0 10px rgba(249,115,22,.35); }
+    .tb.danger:hover { border-color: var(--red); background: var(--red); }
+    .canvas-body { flex: 1; position: relative; background: #000; display: flex; align-items: center; justify-content: center; }
+    #canvas { display: block; }
+    .canvas-footer {
+      padding: 6px 12px; font-size: 11px; color: var(--text-secondary);
+      border-top: 1px solid var(--border); min-height: 28px;
     }
-    @media (max-width: 1000px) {
-      .editor-layout { grid-template-columns: 1fr; }
-    }
-    
-    .canvas-container {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
+    .canvas-footer.active { color: var(--orange); font-weight: 600; }
+
+    /* ---- Sidebar ---- */
+    .sidebar { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; }
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border); border-radius: 10px;
       padding: 16px;
     }
-    .canvas-toolbar {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-      flex-wrap: wrap;
-      align-items: center;
+    .card.hl { border-color: var(--orange); box-shadow: 0 0 12px rgba(249,115,22,.12); }
+    .card-hdr {
+      font-size: 13px; font-weight: 600; margin-bottom: 12px;
+      padding-bottom: 10px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 8px;
     }
-    .canvas-toolbar .tbtn {
-      padding: 6px 14px;
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      background: var(--bg-hover);
-      color: var(--text-primary);
-      font-size: 13px;
-      cursor: pointer;
-      transition: all 0.2s;
+    .badge {
+      width: 20px; height: 20px; border-radius: 50%; display: inline-flex;
+      align-items: center; justify-content: center;
+      background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; flex-shrink: 0;
     }
-    .canvas-toolbar .tbtn:hover {
-      background: var(--accent-blue);
-      border-color: var(--accent-blue);
+    .badge.on { background: var(--orange); animation: pulse 1.4s infinite; }
+    @keyframes pulse { 0%,100%{box-shadow:0 0 0 0 rgba(249,115,22,.35)} 50%{box-shadow:0 0 0 6px rgba(249,115,22,0)} }
+
+    .row { display: flex; gap: 10px; }
+    .field { flex: 1; margin-bottom: 10px; }
+    .field label { display: block; font-size: 11px; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .03em; }
+    .field input, .field select {
+      width: 100%; padding: 8px 10px; background: var(--bg-dark); border: 1px solid var(--border);
+      border-radius: 5px; color: var(--text-primary); font-size: 13px;
     }
-    .canvas-toolbar .tbtn.active {
-      background: var(--accent-orange);
-      border-color: var(--accent-orange);
-      color: white;
-      box-shadow: 0 0 12px rgba(249,115,22,0.4);
-    }
-    .canvas-toolbar .tbtn.danger:hover {
-      background: var(--status-red);
-      border-color: var(--status-red);
-    }
-    .canvas-toolbar .separator {
-      width: 1px;
-      height: 24px;
-      background: var(--border-color);
-      margin: 0 4px;
-    }
-    .canvas-wrapper {
-      position: relative;
-      background: #000;
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    #canvas { display: block; }
-    .canvas-hint {
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-top: 8px;
-    }
-    .canvas-hint.drawing-active {
-      color: var(--accent-orange);
-      font-weight: 600;
-    }
-    
-    .sidebar {
-      display: flex;
-      flex-direction: column;
-      gap: 16px;
-    }
-    .panel {
-      background: var(--bg-card);
-      border: 1px solid var(--border-color);
-      border-radius: 12px;
-      padding: 20px;
-    }
-    .panel.highlight {
-      border-color: var(--accent-orange);
-      box-shadow: 0 0 12px rgba(249,115,22,0.15);
-    }
-    .panel-title {
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 16px;
-      padding-bottom: 12px;
-      border-bottom: 1px solid var(--border-color);
-    }
-    .step-badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      width: 22px; height: 22px;
-      border-radius: 50%;
-      background: var(--accent-blue);
-      color: white;
-      font-size: 12px;
-      font-weight: 700;
-      margin-right: 8px;
-    }
-    .step-badge.active {
-      background: var(--accent-orange);
-      animation: pulse 1.5s infinite;
-    }
-    @keyframes pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(249,115,22,0.4); }
-      50% { box-shadow: 0 0 0 6px rgba(249,115,22,0); }
-    }
-    
-    .form-row {
-      display: flex;
-      gap: 12px;
-    }
-    .form-group {
-      margin-bottom: 14px;
-      flex: 1;
-    }
-    .form-group:last-child { margin-bottom: 0; }
-    .form-group label {
-      display: block;
-      font-size: 12px;
-      color: var(--text-secondary);
-      margin-bottom: 6px;
-      text-transform: uppercase;
-    }
-    .form-group input, .form-group select {
-      width: 100%;
-      padding: 10px 12px;
-      background: var(--bg-dark);
-      border: 1px solid var(--border-color);
-      border-radius: 6px;
-      color: var(--text-primary);
-      font-size: 14px;
-    }
-    .form-group input:focus {
-      outline: none;
-      border-color: var(--accent-blue);
-    }
-    
+    .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+
     .btn {
-      width: 100%;
-      padding: 12px;
-      border: none;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      cursor: pointer;
-      margin-bottom: 8px;
-      transition: all 0.2s;
+      width: 100%; padding: 10px; border: none; border-radius: 7px;
+      font-size: 13px; font-weight: 600; cursor: pointer; transition: .15s; margin-bottom: 6px;
     }
     .btn:last-child { margin-bottom: 0; }
-    .btn-primary { background: var(--accent-blue); color: white; }
-    .btn-primary:hover { opacity: 0.9; }
-    .btn-orange { background: var(--accent-orange); color: white; }
-    .btn-orange:hover { opacity: 0.9; }
-    .btn-success { background: var(--status-green); color: white; }
-    .btn-success:hover { opacity: 0.9; }
-    .btn-secondary { background: var(--bg-hover); color: var(--text-primary); }
-    .btn-danger { background: var(--status-red); color: white; }
-    .btn-danger:hover { opacity: 0.9; }
-    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
-    
-    .zone-list {
-      max-height: 260px;
-      overflow-y: auto;
-    }
-    .zone-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 10px 12px;
-      background: var(--bg-dark);
-      border-radius: 6px;
-      margin-bottom: 6px;
-      font-size: 13px;
-      cursor: pointer;
-      transition: background 0.2s;
-      border: 1px solid transparent;
-    }
-    .zone-item:hover { background: var(--bg-hover); }
-    .zone-item.selected { border-color: var(--accent-blue); }
-    .zone-item:last-child { margin-bottom: 0; }
-    .zone-item .name { font-weight: 500; }
-    .zone-item .meta { color: var(--text-secondary); font-size: 11px; }
-    .zone-item .delete-btn {
-      background: none;
-      border: none;
-      color: var(--status-red);
-      cursor: pointer;
-      font-size: 18px;
-      padding: 0 4px;
-    }
-    .zone-item .delete-btn:hover { opacity: 0.7; }
-    
-    .toast {
-      position: fixed;
-      bottom: 24px;
-      right: 24px;
-      padding: 14px 24px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      z-index: 1000;
-      animation: slideIn 0.3s ease;
-    }
-    .toast-success { background: var(--status-green); color: white; }
-    .toast-error { background: var(--status-red); color: white; }
-    @keyframes slideIn {
-      from { transform: translateY(20px); opacity: 0; }
-      to { transform: translateY(0); opacity: 1; }
-    }
-    
-    .instructions {
-      font-size: 13px;
-      color: var(--text-secondary);
-      line-height: 1.6;
-    }
-    .instructions ol { margin-left: 20px; }
-    .instructions li { margin-bottom: 6px; }
-    .instructions strong { color: var(--text-primary); }
-    
-    .count-display {
-      font-size: 13px;
-      color: var(--text-secondary);
-      margin-bottom: 12px;
-    }
-    .count-display strong { color: var(--accent-blue); }
+    .btn-blue { background: var(--accent); color: #fff; }
+    .btn-orange { background: var(--orange); color: #fff; }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-red { background: var(--red); color: #fff; }
+    .btn-ghost { background: var(--bg-hover); color: var(--text-primary); }
+    .btn:hover { opacity: .9; }
+    .btn:disabled { opacity: .35; cursor: not-allowed; }
 
-    /* Drawing area preview on canvas */
-    .area-info {
-      padding: 10px 14px;
-      background: var(--bg-dark);
-      border: 1px solid var(--accent-orange);
-      border-radius: 8px;
-      margin-bottom: 14px;
-      font-size: 13px;
+    .hint { font-size: 11px; color: var(--text-secondary); line-height: 1.5; margin-top: 6px; }
+
+    /* ---- Area preview ---- */
+    .area-preview {
+      padding: 8px 12px; background: var(--bg-dark); border: 1px solid var(--orange);
+      border-radius: 6px; margin-bottom: 10px; font-size: 12px;
     }
-    .area-info .label { color: var(--accent-orange); font-weight: 600; font-size: 12px; text-transform: uppercase; }
-    .area-info .dims { color: var(--text-primary); margin-top: 4px; }
+    .area-preview .lbl { color: var(--orange); font-weight: 600; text-transform: uppercase; font-size: 11px; }
+    .area-preview .val { color: var(--text-primary); margin-top: 2px; }
+
+    /* ---- Zone list ---- */
+    .zone-list { max-height: 240px; overflow-y: auto; }
+    .z-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; background: var(--bg-dark); border-radius: 5px;
+      margin-bottom: 4px; font-size: 12px; cursor: pointer;
+      border: 1px solid transparent; transition: .15s;
+    }
+    .z-item:hover { background: var(--bg-hover); }
+    .z-item.sel { border-color: var(--accent); }
+    .z-item .nm { font-weight: 600; }
+    .z-item .mt { color: var(--text-secondary); font-size: 10px; }
+    .z-item .del { background: none; border: none; color: var(--red); cursor: pointer; font-size: 16px; padding: 0 2px; }
+
+    .cnt { font-size: 12px; color: var(--text-secondary); margin-bottom: 8px; }
+    .cnt b { color: var(--accent); }
+
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed; bottom: 20px; right: 20px; padding: 12px 20px;
+      border-radius: 7px; font-size: 13px; font-weight: 500; z-index: 9999;
+      animation: fadeUp .25s ease;
+    }
+    .toast-ok { background: var(--green); color: #fff; }
+    .toast-err { background: var(--red); color: #fff; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
   </style>
 </head>
 <body>
@@ -318,665 +160,441 @@
       <a href="/admin/integrations">Integrations</a>
       <a href="/admin/scada">SCADA</a>
       <a href="/admin/system">System</a>
-      <a href="/logout" style="color:#ef4444">Logout</a>
+      <a href="/logout" style="color:var(--red)">Logout</a>
     </div>
   </nav>
 
-  <div class="container">
-    <div class="page-header">
-      <div>
-        <h2>Zone Editor</h2>
-        <div class="sub">Camera: <strong>{{ camera_id }}</strong> &mdash; Draw parking area, auto-split into spaces, then fine-tune</div>
+  <div class="editor">
+    <!-- CANVAS -->
+    <div class="canvas-panel">
+      <div class="canvas-bar">
+        <span class="cam-label">Camera: {{ camera_id }}</span>
+        <button class="tb" id="btn-draw" onclick="toggleDraw()">&#9998; Draw Area</button>
+        <button class="tb" onclick="delSelected()">&#128465; Delete</button>
+        <button class="tb" onclick="dupSelected()">&#10697; Duplicate</button>
+        <button class="tb danger" onclick="clearAll()">&#10005; Clear All</button>
       </div>
+      <div class="canvas-body">
+        <canvas id="canvas"></canvas>
+      </div>
+      <div class="canvas-footer" id="footer">Click <b>Draw Area</b> to outline a parking section, or load existing zones.</div>
     </div>
-    
-    <div class="editor-layout">
-      <!-- Canvas Area -->
-      <div class="canvas-container">
-        <div class="canvas-toolbar">
-          <button class="tbtn" id="btn-draw-area" onclick="toggleDrawMode()" title="Draw a parking area on the image">&#9998; Draw Parking Area</button>
-          <div class="separator"></div>
-          <button class="tbtn" onclick="deleteSelected()" title="Delete selected box">&#128465; Delete</button>
-          <button class="tbtn" onclick="duplicateSelected()" title="Duplicate selected box">&#128203; Duplicate</button>
-          <button class="tbtn danger" onclick="clearAllBoxes()" title="Clear all boxes from canvas">&#128465; Clear All</button>
-        </div>
-        <div class="canvas-wrapper">
-          <canvas id="canvas" width="960" height="540"></canvas>
-        </div>
-        <div class="canvas-hint" id="canvas-hint">
-          Click <strong>"Draw Parking Area"</strong> to start, or use the sidebar to generate a grid.
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+
+      <!-- STEP 1 -->
+      <div class="card" id="c1">
+        <div class="card-hdr"><span class="badge" id="b1">1</span> Draw Parking Area</div>
+        <p class="hint" style="margin-bottom:10px;">
+          Click <b>&#9998; Draw Area</b> then <b>click &amp; drag</b> on the image to draw a rectangle over a parking section. You can draw multiple areas.
+        </p>
+        <div id="area-info" style="display:none;">
+          <div class="area-preview">
+            <div class="lbl">Drawn Area</div>
+            <div class="val" id="area-dims">&mdash;</div>
+          </div>
+          <button class="btn btn-ghost" onclick="clearArea()" style="font-size:12px;padding:7px;">Redraw</button>
         </div>
       </div>
-      
-      <!-- Sidebar -->
-      <div class="sidebar">
-        <!-- STEP 1: Draw Parking Area -->
-        <div class="panel" id="panel-step1">
-          <div class="panel-title">
-            <span class="step-badge" id="badge-1">1</span> Draw Parking Area
-          </div>
-          <div class="instructions" style="margin-bottom:14px;">
-            Click <strong>"Draw Parking Area"</strong> in the toolbar, then <strong>click and drag</strong> on the image to draw a rectangle over the parking spaces.
-          </div>
-          <div id="area-info-box" style="display:none;">
-            <div class="area-info">
-              <div class="label">Drawn Area</div>
-              <div class="dims" id="area-dims">--</div>
-            </div>
-            <button class="btn btn-secondary" onclick="clearDrawnArea()" style="font-size:13px; padding:8px;">Redraw Area</button>
-          </div>
-        </div>
 
-        <!-- STEP 2: Configure Spaces -->
-        <div class="panel" id="panel-step2">
-          <div class="panel-title">
-            <span class="step-badge" id="badge-2">2</span> Configure Spaces
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Number of Spaces</label>
-              <input id="area-num-spaces" type="number" min="1" max="100" value="10">
-            </div>
-            <div class="form-group">
-              <label>Rows</label>
-              <input id="area-rows" type="number" min="1" max="10" value="1">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>Prefix</label>
-              <input id="area-prefix" value="A" placeholder="A, B, P...">
-            </div>
-            <div class="form-group">
-              <label>Gap %</label>
-              <input id="area-gap" type="number" min="0" max="15" value="2">
-            </div>
-          </div>
-          <button class="btn btn-orange" id="btn-generate-in-area" onclick="generateInArea()" disabled>
-            Generate Spaces in Area
-          </button>
-          <div style="font-size:12px; color:var(--text-secondary); margin-top:6px;">
-            Spaces will be auto-created inside your drawn area with auto-naming.
-          </div>
+      <!-- STEP 2 -->
+      <div class="card" id="c2">
+        <div class="card-hdr"><span class="badge" id="b2">2</span> Split into Spaces</div>
+        <div class="row">
+          <div class="field"><label>Spaces</label><input id="inp-spaces" type="number" min="1" max="50" value="5"></div>
+          <div class="field"><label>Rows</label><input id="inp-rows" type="number" min="1" max="10" value="1"></div>
         </div>
-
-        <!-- STEP 3: Fine-Tune -->
-        <div class="panel" id="panel-step3">
-          <div class="panel-title">
-            <span class="step-badge" id="badge-3">3</span> Fine-Tune &amp; Save
-          </div>
-          <div class="instructions" style="margin-bottom:14px;">
-            <strong>Drag</strong> boxes to reposition. <strong>Drag corners</strong> to resize. <strong>Delete</strong> key removes selected.
-          </div>
-
-          <!-- Zone List -->
-          <div class="count-display">
-            Total: <strong id="zone-count">0</strong> zones
-          </div>
-          <div class="zone-list" id="zone-list">
-            <div style="color: var(--text-secondary); font-size: 13px;">No zones yet. Draw an area above.</div>
-          </div>
+        <div class="row">
+          <div class="field"><label>Prefix</label><input id="inp-prefix" value="A" maxlength="3"></div>
+          <div class="field"><label>Gap %</label><input id="inp-gap" type="number" min="0" max="15" step="1" value="2"></div>
         </div>
+        <button class="btn btn-orange" id="btn-split" onclick="splitArea()" disabled>Split into Spaces</button>
+        <p class="hint">Generates boxes inside the drawn area. Drag &amp; resize each box to fit actual parking lines.</p>
+      </div>
 
-        <!-- Save Actions -->
-        <div class="panel">
-          <div class="panel-title">&#128190; Save</div>
-          <button class="btn btn-success" onclick="saveAllZones(false)">Save All Zones</button>
-          <button class="btn btn-danger" onclick="saveAllZones(true)">Replace All (Clear + Save)</button>
-          <div style="font-size:12px; color:var(--text-secondary); margin-top:6px;">
-            <strong>Save All</strong> = update/add zones. <strong>Replace All</strong> = delete existing first, then save.
-          </div>
+      <!-- STEP 3 -->
+      <div class="card" id="c3">
+        <div class="card-hdr"><span class="badge" id="b3">3</span> Fine-Tune</div>
+        <div class="cnt">Zones on canvas: <b id="zcnt">0</b></div>
+        <div class="zone-list" id="zlist">
+          <div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div>
         </div>
+        <p class="hint" style="margin-top:8px;">Click a box to select. Drag to move. Drag corners to resize. Press <b>Delete</b> key to remove.</p>
+      </div>
 
-        <!-- Legacy: Full-canvas grid -->
-        <details style="margin-top:0;">
-          <summary style="cursor:pointer; color:var(--text-secondary); font-size:13px; padding:8px 0;">
-            Advanced: Full-Canvas Grid
-          </summary>
-          <div class="panel" style="margin-top:8px;">
-            <div class="panel-title">&#9632; Full-Canvas Grid</div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Rows</label>
-                <input id="grid-rows" type="number" min="1" max="20" value="3">
-              </div>
-              <div class="form-group">
-                <label>Columns</label>
-                <input id="grid-cols" type="number" min="1" max="20" value="5">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Prefix</label>
-                <input id="grid-prefix" value="A" placeholder="A, B, P...">
-              </div>
-              <div class="form-group">
-                <label>Gap %</label>
-                <input id="grid-padding" type="number" min="0" max="20" value="2" title="Gap between boxes">
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>Naming Style</label>
-                <select id="grid-naming">
-                  <option value="row-letter">A01, A02... B01, B02...</option>
-                  <option value="sequential">P01, P02, P03...</option>
-                </select>
-              </div>
-            </div>
-            <button class="btn btn-primary" onclick="generateGrid()">Generate Grid</button>
-          </div>
-        </details>
-        
-        <!-- Instructions -->
-        <div class="panel">
-          <div class="panel-title">How It Works</div>
-          <div class="instructions">
-            <ol>
-              <li>Click <strong>"Draw Parking Area"</strong> and drag a rectangle over the parking spaces</li>
-              <li>Enter the <strong>number of spaces</strong> and click <strong>"Generate Spaces in Area"</strong></li>
-              <li>Boxes are auto-created with names like A01, A02, A03...</li>
-              <li><strong>Drag</strong> each box to fine-tune its position</li>
-              <li><strong>Resize</strong> by dragging corners to match real parking lines</li>
-              <li><strong>Delete</strong> unwanted boxes (select + Delete key)</li>
-              <li>Click <strong>Save All Zones</strong> when done</li>
-            </ol>
-          </div>
-        </div>
+      <!-- SAVE -->
+      <div class="card">
+        <div class="card-hdr">&#128190; Save</div>
+        <button class="btn btn-green" onclick="saveZones(false)">Save All Zones</button>
+        <button class="btn btn-red" onclick="saveZones(true)">Replace All (Clear + Save)</button>
+        <p class="hint"><b>Save All</b> adds/updates. <b>Replace All</b> deletes existing zones first then saves.</p>
       </div>
     </div>
   </div>
 
   <script>
-    const cameraId = "{{ camera_id }}";
-    const CW = 960, CH = 540;
-    
-    const canvas = new fabric.Canvas('canvas', {
-      selection: true,
-      preserveObjectStacking: true
-    });
-    
-    // Zone color palette for rows
-    const COLORS = [
-      { fill: 'rgba(59,130,246,0.25)',  stroke: '#3b82f6' },
-      { fill: 'rgba(34,197,94,0.25)',   stroke: '#22c55e' },
-      { fill: 'rgba(234,179,8,0.25)',   stroke: '#eab308' },
-      { fill: 'rgba(168,85,247,0.25)',  stroke: '#a855f7' },
-      { fill: 'rgba(236,72,153,0.25)',  stroke: '#ec4899' },
-      { fill: 'rgba(249,115,22,0.25)',  stroke: '#f97316' },
-      { fill: 'rgba(20,184,166,0.25)',  stroke: '#14b8a6' },
-      { fill: 'rgba(239,68,68,0.25)',   stroke: '#ef4444' },
-    ];
-    
-    let zoneBoxes = []; // { rect, label, zoneId, capacity }
-    
-    // ========== DRAW PARKING AREA STATE ==========
-    let drawMode = false;
-    let isDrawing = false;
-    let drawStartX = 0, drawStartY = 0;
-    let drawnArea = null;       // fabric.Rect for the big area outline
-    let drawnAreaCoords = null;  // { x, y, w, h } in canvas pixels
-    
-    // ---- Background Image ----
-    function loadBackground() {
-      fetch(`/api/v1/cameras/${cameraId}/snapshot-latest`)
-        .then(resp => resp.ok ? resp.blob() : null)
-        .then(blob => {
-          if (!blob) {
-            canvas.backgroundColor = '#1e293b';
-            const msg = new fabric.Text('No snapshot available\nUpload an image via FTP first', {
-              left: CW/2, top: CH/2, fontSize: 20, fill: '#94a3b8',
-              textAlign: 'center', originX: 'center', originY: 'center',
-              selectable: false, evented: false
-            });
-            canvas.add(msg);
-            canvas.renderAll();
-            return;
-          }
-          const url = URL.createObjectURL(blob);
-          fabric.Image.fromURL(url, img => {
-            img.scaleToWidth(CW);
-            img.scaleToHeight(CH);
-            canvas.setBackgroundImage(img, canvas.renderAll.bind(canvas));
+  const CAM = "{{ camera_id }}";
+  let CW = 1080, CH = 608;
+
+  const canvas = new fabric.Canvas('canvas', { selection: true, preserveObjectStacking: true });
+
+  /* Palette */
+  const PAL = [
+    { f:'rgba(59,130,246,.22)',  s:'#3b82f6' },
+    { f:'rgba(34,197,94,.22)',   s:'#22c55e' },
+    { f:'rgba(234,179,8,.22)',   s:'#eab308' },
+    { f:'rgba(168,85,247,.22)',  s:'#a855f7' },
+    { f:'rgba(236,72,153,.22)',  s:'#ec4899' },
+    { f:'rgba(249,115,22,.22)',  s:'#f97316' },
+    { f:'rgba(20,184,166,.22)',  s:'#14b8a6' },
+    { f:'rgba(239,68,68,.22)',   s:'#ef4444' },
+  ];
+  let palIdx = 0;
+
+  let zones = [];  // {rect, label, id, cap, ci}
+
+  /* ========== BACKGROUND ========== */
+  function loadBg() {
+    fetch(`/api/v1/cameras/${CAM}/snapshot-latest`)
+      .then(r => r.ok ? r.blob() : null)
+      .then(blob => {
+        if (!blob) { noBg(); return; }
+        const url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          const box = document.querySelector('.canvas-body');
+          const maxW = box.clientWidth - 4;
+          const maxH = box.clientHeight - 4;
+          const scale = Math.min(maxW / img.width, maxH / img.height, 1);
+          CW = Math.round(img.width * scale);
+          CH = Math.round(img.height * scale);
+          canvas.setWidth(CW); canvas.setHeight(CH);
+          fabric.Image.fromURL(url, fImg => {
+            fImg.scaleToWidth(CW); fImg.scaleToHeight(CH);
+            canvas.setBackgroundImage(fImg, canvas.renderAll.bind(canvas));
           });
-        })
-        .catch(() => { canvas.backgroundColor = '#1e293b'; canvas.renderAll(); });
-    }
-    
-    // ========== STEP 1: DRAW PARKING AREA ==========
-    function toggleDrawMode() {
-      drawMode = !drawMode;
-      const btn = document.getElementById('btn-draw-area');
-      const hint = document.getElementById('canvas-hint');
-      
-      if (drawMode) {
-        btn.classList.add('active');
-        hint.textContent = '🖊 DRAWING MODE — Click and drag on the image to draw a parking area rectangle';
-        hint.classList.add('drawing-active');
-        canvas.defaultCursor = 'crosshair';
-        canvas.hoverCursor = 'crosshair';
-        canvas.selection = false;
-        // Disable zone boxes while drawing
-        zoneBoxes.forEach(z => { z.rect.selectable = false; z.rect.evented = false; });
-        canvas.discardActiveObject();
-        canvas.renderAll();
-        // Highlight step 1
-        document.getElementById('badge-1').classList.add('active');
-        document.getElementById('panel-step1').classList.add('highlight');
-      } else {
-        exitDrawMode();
-      }
-    }
-    
-    function exitDrawMode() {
-      drawMode = false;
-      isDrawing = false;
-      const btn = document.getElementById('btn-draw-area');
-      const hint = document.getElementById('canvas-hint');
-      btn.classList.remove('active');
-      hint.innerHTML = 'Click a box to select. Drag to move. Drag corners to resize. Press <strong>Delete</strong> key to remove.';
-      hint.classList.remove('drawing-active');
-      canvas.defaultCursor = 'default';
-      canvas.hoverCursor = 'move';
-      canvas.selection = true;
-      zoneBoxes.forEach(z => { z.rect.selectable = true; z.rect.evented = true; });
-      canvas.renderAll();
-      document.getElementById('badge-1').classList.remove('active');
-      document.getElementById('panel-step1').classList.remove('highlight');
-    }
-    
-    // Mouse events for drawing
-    canvas.on('mouse:down', function(opt) {
-      if (!drawMode) return;
-      isDrawing = true;
-      const pointer = canvas.getPointer(opt.e);
-      drawStartX = pointer.x;
-      drawStartY = pointer.y;
-      
-      // Remove old drawn area if exists
-      if (drawnArea) { canvas.remove(drawnArea); drawnArea = null; }
-      
-      drawnArea = new fabric.Rect({
-        left: drawStartX, top: drawStartY,
-        width: 0, height: 0,
-        fill: 'rgba(249,115,22,0.12)',
-        stroke: '#f97316', strokeWidth: 3,
-        strokeDashArray: [8, 4],
-        selectable: false, evented: false,
-        rx: 4, ry: 4,
-        _isDrawnArea: true
-      });
-      canvas.add(drawnArea);
-    });
-    
-    canvas.on('mouse:move', function(opt) {
-      if (!drawMode || !isDrawing || !drawnArea) return;
-      const pointer = canvas.getPointer(opt.e);
-      const x = Math.min(drawStartX, pointer.x);
-      const y = Math.min(drawStartY, pointer.y);
-      const w = Math.abs(pointer.x - drawStartX);
-      const h = Math.abs(pointer.y - drawStartY);
-      drawnArea.set({ left: x, top: y, width: w, height: h });
-      canvas.renderAll();
-    });
-    
-    canvas.on('mouse:up', function(opt) {
-      if (!drawMode || !isDrawing) return;
-      isDrawing = false;
-      
-      if (!drawnArea) return;
-      const w = drawnArea.width, h = drawnArea.height;
-      
-      // Too small? Ignore
-      if (w < 30 || h < 20) {
-        canvas.remove(drawnArea);
-        drawnArea = null;
-        showToast('Area too small — drag a larger rectangle', 'error');
-        return;
-      }
-      
-      drawnAreaCoords = {
-        x: drawnArea.left, y: drawnArea.top,
-        w: drawnArea.width, h: drawnArea.height
-      };
-      
-      // Update UI
-      document.getElementById('area-info-box').style.display = 'block';
-      const pctW = (w/CW*100).toFixed(1), pctH = (h/CH*100).toFixed(1);
-      document.getElementById('area-dims').textContent =
-        `${Math.round(w)}×${Math.round(h)} px  (${pctW}% × ${pctH}% of image)`;
-      
-      // Enable generate button
-      document.getElementById('btn-generate-in-area').disabled = false;
-      
-      // Advance to step 2
-      exitDrawMode();
-      document.getElementById('badge-2').classList.add('active');
-      document.getElementById('panel-step2').classList.add('highlight');
-      
-      showToast('Parking area drawn! Now configure spaces in Step 2.', 'success');
-    });
-    
-    function clearDrawnArea() {
-      if (drawnArea) { canvas.remove(drawnArea); drawnArea = null; }
-      drawnAreaCoords = null;
-      document.getElementById('area-info-box').style.display = 'none';
-      document.getElementById('btn-generate-in-area').disabled = true;
-      document.getElementById('badge-2').classList.remove('active');
-      document.getElementById('panel-step2').classList.remove('highlight');
-      canvas.renderAll();
-    }
-    
-    // ========== STEP 2: GENERATE SPACES IN DRAWN AREA ==========
-    function generateInArea() {
-      if (!drawnAreaCoords) {
-        showToast('Draw a parking area first (Step 1)', 'error');
-        return;
-      }
-      
-      const numSpaces = parseInt(document.getElementById('area-num-spaces').value) || 10;
-      const rows = parseInt(document.getElementById('area-rows').value) || 1;
-      const prefix = document.getElementById('area-prefix').value || 'A';
-      const gapPct = parseFloat(document.getElementById('area-gap').value) || 2;
-      
-      const cols = Math.ceil(numSpaces / rows);
-      const { x: areaX, y: areaY, w: areaW, h: areaH } = drawnAreaCoords;
-      
-      const gapX = (gapPct / 100) * areaW;
-      const gapY = (gapPct / 100) * areaH;
-      const boxW = (areaW - gapX * (cols + 1)) / cols;
-      const boxH = (areaH - gapY * (rows + 1)) / rows;
-      
-      // Find existing max number for this prefix to avoid collisions
-      let startNum = 1;
-      zoneBoxes.forEach(z => {
-        const m = z.zoneId.match(new RegExp(`^${prefix}(\\d+)$`));
-        if (m) startNum = Math.max(startNum, parseInt(m[1]) + 1);
-      });
-      
-      let count = 0;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          if (count >= numSpaces) break;
-          count++;
-          const num = startNum + count - 1;
-          const zoneId = prefix + String(num).padStart(2, '0');
-          
-          const bx = areaX + gapX + c * (boxW + gapX);
-          const by = areaY + gapY + r * (boxH + gapY);
-          addZoneBox(bx, by, Math.max(boxW, 10), Math.max(boxH, 10), zoneId, 1, r % COLORS.length);
-        }
-      }
-      
-      // Remove the drawn area outline (spaces are placed, no longer needed)
-      if (drawnArea) { canvas.remove(drawnArea); drawnArea = null; }
-      drawnAreaCoords = null;
-      document.getElementById('area-info-box').style.display = 'none';
-      document.getElementById('btn-generate-in-area').disabled = true;
-      
-      // Move to step 3
-      document.getElementById('badge-2').classList.remove('active');
-      document.getElementById('panel-step2').classList.remove('highlight');
-      document.getElementById('badge-3').classList.add('active');
-      document.getElementById('panel-step3').classList.add('highlight');
-      setTimeout(() => {
-        document.getElementById('badge-3').classList.remove('active');
-        document.getElementById('panel-step3').classList.remove('highlight');
-      }, 3000);
-      
-      updateZoneList();
-      showToast(`Generated ${count} spaces (${prefix}${String(startNum).padStart(2,'0')} – ${prefix}${String(startNum+count-1).padStart(2,'0')}). Fine-tune them now!`, 'success');
-    }
-    
-    // ========== LEGACY: Full-canvas Grid Generation ==========
-    function generateGrid() {
-      const rows = parseInt(document.getElementById('grid-rows').value) || 3;
-      const cols = parseInt(document.getElementById('grid-cols').value) || 5;
-      const prefix = document.getElementById('grid-prefix').value || 'A';
-      const padding = parseFloat(document.getElementById('grid-padding').value) || 2;
-      const naming = document.getElementById('grid-naming').value;
-      
-      const padX = (padding / 100) * CW;
-      const padY = (padding / 100) * CH;
-      const boxW = (CW - padX * (cols + 1)) / cols;
-      const boxH = (CH - padY * (rows + 1)) / rows;
-      
-      let count = 0;
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          count++;
-          let zoneId;
-          if (naming === 'row-letter') {
-            const rowLetter = String.fromCharCode(65 + r);
-            zoneId = rowLetter + String(c + 1).padStart(2, '0');
-          } else {
-            zoneId = prefix + String(count).padStart(2, '0');
-          }
-          
-          const x = padX + c * (boxW + padX);
-          const y = padY + r * (boxH + padY);
-          addZoneBox(x, y, boxW, boxH, zoneId, 1, r % COLORS.length);
-        }
-      }
-      
-      updateZoneList();
-      showToast(`Generated ${count} zones`, 'success');
-    }
-    
-    // ---- Add Zone Box ----
-    function addZoneBox(x, y, w, h, zoneId, capacity, colorIdx) {
-      colorIdx = colorIdx || 0;
-      const color = COLORS[colorIdx % COLORS.length];
-      
-      const rect = new fabric.Rect({
-        left: x, top: y, width: w, height: h,
-        fill: color.fill, stroke: color.stroke, strokeWidth: 2,
-        rx: 4, ry: 4,
-        cornerColor: '#fff', cornerStrokeColor: color.stroke,
-        cornerSize: 8, transparentCorners: false,
-        hasRotatingPoint: false, lockRotation: true,
-        _zoneId: zoneId, _capacity: capacity, _colorIdx: colorIdx
-      });
-      
-      const label = new fabric.Text(zoneId, {
-        left: x + w/2, top: y + h/2,
-        fontSize: Math.min(14, Math.max(10, w/5)),
-        fill: '#fff', fontWeight: 'bold', textAlign: 'center',
-        originX: 'center', originY: 'center',
-        selectable: false, evented: false,
-        shadow: new fabric.Shadow({ color: 'rgba(0,0,0,0.8)', blur: 3, offsetX: 1, offsetY: 1 }),
-        _isLabel: true, _parentZoneId: zoneId
-      });
-      
-      canvas.add(rect);
-      canvas.add(label);
-      zoneBoxes.push({ rect, label, zoneId, capacity });
-      
-      rect.on('moving',   () => syncLabel(rect, label));
-      rect.on('scaling',  () => syncLabel(rect, label));
-      rect.on('modified', () => { syncLabel(rect, label); updateZoneList(); });
-    }
-    
-    function syncLabel(rect, label) {
-      const b = rect.getBoundingRect();
-      label.set({ left: b.left + b.width/2, top: b.top + b.height/2 });
-      label.setCoords();
-      canvas.renderAll();
-    }
-    
-    // ---- Delete ----
-    function deleteSelected() {
-      const active = canvas.getActiveObject();
-      if (!active || !active._zoneId) { showToast('Select a box first', 'error'); return; }
-      removeZoneBox(active._zoneId);
-    }
-    
-    function removeZoneBox(zoneId) {
-      const idx = zoneBoxes.findIndex(z => z.zoneId === zoneId);
-      if (idx === -1) return;
-      const entry = zoneBoxes[idx];
-      canvas.remove(entry.rect);
-      canvas.remove(entry.label);
-      zoneBoxes.splice(idx, 1);
-      canvas.discardActiveObject();
-      canvas.renderAll();
-      updateZoneList();
-    }
-    
-    function clearAllBoxes() {
-      if (zoneBoxes.length && !confirm(`Clear all ${zoneBoxes.length} zones from canvas?`)) return;
-      zoneBoxes.forEach(z => { canvas.remove(z.rect); canvas.remove(z.label); });
-      zoneBoxes = [];
-      if (drawnArea) { canvas.remove(drawnArea); drawnArea = null; }
-      drawnAreaCoords = null;
-      document.getElementById('area-info-box').style.display = 'none';
-      document.getElementById('btn-generate-in-area').disabled = true;
-      canvas.discardActiveObject();
-      canvas.renderAll();
-      updateZoneList();
-    }
-    
-    document.addEventListener('keydown', e => {
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (e.target.tagName === 'INPUT') return;
-        deleteSelected();
-      }
-      // Escape exits draw mode
-      if (e.key === 'Escape' && drawMode) {
-        exitDrawMode();
-      }
-    });
-    
-    // ---- Duplicate ----
-    function duplicateSelected() {
-      const active = canvas.getActiveObject();
-      if (!active || !active._zoneId) { showToast('Select a box first', 'error'); return; }
-      
-      const b = active.getBoundingRect();
-      const origId = active._zoneId;
-      const m = origId.match(/^([A-Za-z]*)(\d+)$/);
-      let newId = m ? m[1] + String(parseInt(m[2])+1).padStart(m[2].length, '0') : origId+'_copy';
-      while (zoneBoxes.find(z => z.zoneId === newId)) {
-        const m2 = newId.match(/^([A-Za-z]*)(\d+)$/);
-        newId = m2 ? m2[1]+String(parseInt(m2[2])+1).padStart(m2[2].length,'0') : newId+'2';
-      }
-      
-      addZoneBox(b.left+20, b.top+20, b.width, b.height, newId, active._capacity||1, active._colorIdx||0);
-      updateZoneList();
-      showToast(`Duplicated as ${newId}`, 'success');
-    }
-    
-    // ---- Zone List ----
-    function updateZoneList() {
-      const list = document.getElementById('zone-list');
-      document.getElementById('zone-count').textContent = zoneBoxes.length;
-      
-      if (!zoneBoxes.length) {
-        list.innerHTML = '<div style="color:var(--text-secondary);font-size:13px;">No zones yet. Draw an area above.</div>';
-        return;
-      }
-      
-      list.innerHTML = zoneBoxes.map(z => {
-        const b = z.rect.getBoundingRect();
-        const pW = (b.width/CW*100).toFixed(1);
-        const pH = (b.height/CH*100).toFixed(1);
-        return `<div class="zone-item" onclick="selectZone('${z.zoneId}')">
-          <div><div class="name">${z.zoneId}</div><div class="meta">${pW}% &times; ${pH}%</div></div>
-          <button class="delete-btn" onclick="event.stopPropagation();removeZoneBox('${z.zoneId}')">&times;</button>
-        </div>`;
-      }).join('');
-    }
-    
-    function selectZone(zoneId) {
-      const entry = zoneBoxes.find(z => z.zoneId === zoneId);
-      if (!entry) return;
-      canvas.setActiveObject(entry.rect);
-      canvas.renderAll();
-    }
-    
-    // ---- Save All ----
-    async function saveAllZones(clearExisting) {
-      if (!zoneBoxes.length) { showToast('No zones to save', 'error'); return; }
-      if (clearExisting && !confirm('This will DELETE all existing zones and replace with current canvas. Continue?')) return;
-      
-      const zones = zoneBoxes.map(z => {
-        const b = z.rect.getBoundingRect();
-        const x1 = b.left/CW*100, y1 = b.top/CH*100;
-        const x2 = (b.left+b.width)/CW*100, y2 = (b.top+b.height)/CH*100;
-        return {
-          zone_id: z.zoneId, name: z.zoneId,
-          capacity_units: z.capacity || 1,
-          polygon_json: JSON.stringify([[x1,y1],[x2,y1],[x2,y2],[x1,y2]])
         };
+        img.src = url;
+      })
+      .catch(() => noBg());
+  }
+  function noBg() {
+    const box = document.querySelector('.canvas-body');
+    CW = box.clientWidth - 4; CH = box.clientHeight - 4;
+    canvas.setWidth(CW); canvas.setHeight(CH);
+    canvas.backgroundColor = '#1e293b';
+    canvas.add(new fabric.Text('No snapshot available\nUpload an image via FTP first', {
+      left: CW/2, top: CH/2, fontSize: 18, fill: '#94a3b8',
+      textAlign: 'center', originX: 'center', originY: 'center',
+      selectable: false, evented: false
+    }));
+    canvas.renderAll();
+  }
+
+  /* ========== STEP 1 — DRAW AREA ========== */
+  let drawMode = false, drawing = false;
+  let dStartX = 0, dStartY = 0;
+  let areaRect = null, areaCoords = null;
+
+  function toggleDraw() {
+    drawMode = !drawMode;
+    if (drawMode) {
+      document.getElementById('btn-draw').classList.add('active');
+      document.getElementById('footer').textContent = '\u270e DRAW MODE \u2014 click & drag to outline the parking area';
+      document.getElementById('footer').classList.add('active');
+      canvas.defaultCursor = 'crosshair'; canvas.hoverCursor = 'crosshair';
+      canvas.selection = false;
+      zones.forEach(z => { z.rect.selectable = false; z.rect.evented = false; });
+      canvas.discardActiveObject(); canvas.renderAll();
+      document.getElementById('b1').classList.add('on');
+      document.getElementById('c1').classList.add('hl');
+    } else {
+      endDraw();
+    }
+  }
+  function endDraw() {
+    drawMode = false; drawing = false;
+    document.getElementById('btn-draw').classList.remove('active');
+    document.getElementById('footer').innerHTML = 'Click a box to select. Drag to move. Drag corners to resize. Press <b>Delete</b> to remove.';
+    document.getElementById('footer').classList.remove('active');
+    canvas.defaultCursor = 'default'; canvas.hoverCursor = 'move';
+    canvas.selection = true;
+    zones.forEach(z => { z.rect.selectable = true; z.rect.evented = true; });
+    canvas.renderAll();
+    document.getElementById('b1').classList.remove('on');
+    document.getElementById('c1').classList.remove('hl');
+  }
+
+  canvas.on('mouse:down', opt => {
+    if (!drawMode) return;
+    drawing = true;
+    const p = canvas.getPointer(opt.e);
+    dStartX = p.x; dStartY = p.y;
+    if (areaRect) { canvas.remove(areaRect); areaRect = null; }
+    areaRect = new fabric.Rect({
+      left: dStartX, top: dStartY, width: 0, height: 0,
+      fill: 'rgba(249,115,22,.1)', stroke: '#f97316', strokeWidth: 2,
+      strokeDashArray: [8,4], selectable: false, evented: false, rx: 3, ry: 3, _isArea: true
+    });
+    canvas.add(areaRect);
+  });
+  canvas.on('mouse:move', opt => {
+    if (!drawMode || !drawing || !areaRect) return;
+    const p = canvas.getPointer(opt.e);
+    areaRect.set({
+      left: Math.min(dStartX, p.x), top: Math.min(dStartY, p.y),
+      width: Math.abs(p.x - dStartX), height: Math.abs(p.y - dStartY)
+    });
+    canvas.renderAll();
+  });
+  canvas.on('mouse:up', () => {
+    if (!drawMode || !drawing) return;
+    drawing = false;
+    if (!areaRect || areaRect.width < 30 || areaRect.height < 20) {
+      if (areaRect) { canvas.remove(areaRect); areaRect = null; }
+      toast('Area too small \u2014 drag a bigger rectangle', 'err'); return;
+    }
+    areaCoords = { x: areaRect.left, y: areaRect.top, w: areaRect.width, h: areaRect.height };
+    document.getElementById('area-info').style.display = 'block';
+    document.getElementById('area-dims').textContent =
+      Math.round(areaCoords.w) + '\u00d7' + Math.round(areaCoords.h) + ' px  (' +
+      (areaCoords.w/CW*100).toFixed(1) + '% \u00d7 ' + (areaCoords.h/CH*100).toFixed(1) + '%)';
+    document.getElementById('btn-split').disabled = false;
+    endDraw();
+    document.getElementById('b2').classList.add('on');
+    document.getElementById('c2').classList.add('hl');
+    toast('Area drawn \u2014 set number of spaces and click Split', 'ok');
+  });
+
+  function clearArea() {
+    if (areaRect) { canvas.remove(areaRect); areaRect = null; }
+    areaCoords = null;
+    document.getElementById('area-info').style.display = 'none';
+    document.getElementById('btn-split').disabled = true;
+    document.getElementById('b2').classList.remove('on');
+    document.getElementById('c2').classList.remove('hl');
+    canvas.renderAll();
+  }
+
+  /* ========== STEP 2 — SPLIT ========== */
+  function splitArea() {
+    if (!areaCoords) { toast('Draw an area first', 'err'); return; }
+    const total  = Math.max(1, parseInt(document.getElementById('inp-spaces').value) || 5);
+    const rows   = Math.max(1, parseInt(document.getElementById('inp-rows').value)   || 1);
+    const prefix = document.getElementById('inp-prefix').value || 'A';
+    const gapPct = parseFloat(document.getElementById('inp-gap').value) || 2;
+    const cols = Math.ceil(total / rows);
+    const { x: ax, y: ay, w: aw, h: ah } = areaCoords;
+    const gx = (gapPct / 100) * aw, gy = (gapPct / 100) * ah;
+    const bw = (aw - gx * (cols + 1)) / cols;
+    const bh = (ah - gy * (rows + 1)) / rows;
+
+    let start = 1;
+    zones.forEach(z => {
+      const m = z.id.match(new RegExp('^' + prefix + '(\\d+)$', 'i'));
+      if (m) start = Math.max(start, parseInt(m[1]) + 1);
+    });
+
+    const ci = palIdx++ % PAL.length;
+    let n = 0;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        if (n >= total) break;
+        n++;
+        const id = prefix + String(start + n - 1).padStart(2, '0');
+        addBox(ax + gx + c * (bw + gx), ay + gy + r * (bh + gy), Math.max(bw, 12), Math.max(bh, 12), id, 1, ci);
+      }
+    }
+
+    if (areaRect) { canvas.remove(areaRect); areaRect = null; }
+    areaCoords = null;
+    document.getElementById('area-info').style.display = 'none';
+    document.getElementById('btn-split').disabled = true;
+    document.getElementById('b2').classList.remove('on');
+    document.getElementById('c2').classList.remove('hl');
+
+    document.getElementById('b3').classList.add('on');
+    document.getElementById('c3').classList.add('hl');
+    setTimeout(() => {
+      document.getElementById('b3').classList.remove('on');
+      document.getElementById('c3').classList.remove('hl');
+    }, 2500);
+
+    refreshList();
+    toast('Generated ' + n + ' spaces (' + prefix + String(start).padStart(2,'0') +
+      ' \u2013 ' + prefix + String(start+n-1).padStart(2,'0') + '). Drag & resize to fit.', 'ok');
+  }
+
+  /* ========== ADD BOX ========== */
+  function addBox(x, y, w, h, id, cap, ci) {
+    ci = ci ?? 0;
+    const c = PAL[ci % PAL.length];
+    const rect = new fabric.Rect({
+      left: x, top: y, width: w, height: h,
+      fill: c.f, stroke: c.s, strokeWidth: 2, rx: 3, ry: 3,
+      cornerColor: '#fff', cornerStrokeColor: c.s, cornerSize: 7,
+      transparentCorners: false, hasRotatingPoint: false, lockRotation: true,
+      _zid: id, _cap: cap, _ci: ci
+    });
+    const label = new fabric.Text(id, {
+      left: x + w/2, top: y + h/2,
+      fontSize: Math.min(14, Math.max(9, w/5)),
+      fill: '#fff', fontWeight: 'bold', textAlign: 'center',
+      originX: 'center', originY: 'center',
+      selectable: false, evented: false,
+      shadow: new fabric.Shadow({ color: 'rgba(0,0,0,.85)', blur: 3, offsetX: 1, offsetY: 1 }),
+      _isLbl: true, _pzid: id
+    });
+    canvas.add(rect); canvas.add(label);
+    zones.push({ rect, label, id, cap: cap||1, ci });
+    rect.on('moving',   () => syncLbl(rect, label));
+    rect.on('scaling',  () => syncLbl(rect, label));
+    rect.on('modified', () => { syncLbl(rect, label); refreshList(); });
+  }
+  function syncLbl(r, l) {
+    const b = r.getBoundingRect();
+    l.set({ left: b.left + b.width/2, top: b.top + b.height/2 }); l.setCoords();
+    canvas.renderAll();
+  }
+
+  /* ========== ACTIONS ========== */
+  function delSelected() {
+    const o = canvas.getActiveObject();
+    if (!o || !o._zid) { toast('Select a box first', 'err'); return; }
+    rmBox(o._zid);
+  }
+  function rmBox(id) {
+    const i = zones.findIndex(z => z.id === id);
+    if (i < 0) return;
+    canvas.remove(zones[i].rect); canvas.remove(zones[i].label);
+    zones.splice(i, 1);
+    canvas.discardActiveObject(); canvas.renderAll(); refreshList();
+  }
+  function dupSelected() {
+    const o = canvas.getActiveObject();
+    if (!o || !o._zid) { toast('Select a box first', 'err'); return; }
+    const b = o.getBoundingRect();
+    const nid = nextId(o._zid);
+    addBox(b.left + 15, b.top + 15, b.width, b.height, nid, o._cap||1, o._ci||0);
+    refreshList();
+    toast('Duplicated \u2192 ' + nid, 'ok');
+  }
+  function nextId(orig) {
+    const m = orig.match(/^([A-Za-z]*)(\d+)$/);
+    if (!m) return orig + '_2';
+    let n = parseInt(m[2]) + 1;
+    let id = m[1] + String(n).padStart(m[2].length, '0');
+    while (zones.find(z => z.id === id)) { n++; id = m[1] + String(n).padStart(m[2].length, '0'); }
+    return id;
+  }
+  function clearAll() {
+    if (zones.length && !confirm('Clear all ' + zones.length + ' zones from canvas?')) return;
+    zones.forEach(z => { canvas.remove(z.rect); canvas.remove(z.label); });
+    zones = [];
+    if (areaRect) { canvas.remove(areaRect); areaRect = null; }
+    areaCoords = null;
+    document.getElementById('area-info').style.display = 'none';
+    document.getElementById('btn-split').disabled = true;
+    canvas.discardActiveObject(); canvas.renderAll(); refreshList();
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT') return;
+    if (e.key === 'Delete' || e.key === 'Backspace') delSelected();
+    if (e.key === 'Escape' && drawMode) endDraw();
+  });
+
+  /* ========== ZONE LIST ========== */
+  function refreshList() {
+    const el = document.getElementById('zlist');
+    document.getElementById('zcnt').textContent = zones.length;
+    if (!zones.length) {
+      el.innerHTML = '<div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div>';
+      return;
+    }
+    el.innerHTML = zones.map(z => {
+      const b = z.rect.getBoundingRect();
+      return '<div class="z-item" onclick="selZone(\'' + z.id + '\')">' +
+        '<div><span class="nm">' + z.id + '</span> <span class="mt">' +
+        (b.width/CW*100).toFixed(1) + '% \u00d7 ' + (b.height/CH*100).toFixed(1) + '%</span></div>' +
+        '<button class="del" onclick="event.stopPropagation();rmBox(\'' + z.id + '\')">&times;</button></div>';
+    }).join('');
+  }
+  function selZone(id) {
+    const z = zones.find(z => z.id === id);
+    if (z) { canvas.setActiveObject(z.rect); canvas.renderAll(); }
+  }
+
+  canvas.on('selection:created', e => hlItem(e.selected?.[0]?._zid));
+  canvas.on('selection:updated', e => hlItem(e.selected?.[0]?._zid));
+  canvas.on('selection:cleared', () => document.querySelectorAll('.z-item').forEach(el => el.classList.remove('sel')));
+  function hlItem(id) {
+    document.querySelectorAll('.z-item').forEach(el => {
+      const match = el.querySelector('.nm')?.textContent === id;
+      el.classList.toggle('sel', match);
+      if (match) el.scrollIntoView({ block: 'nearest' });
+    });
+  }
+
+  /* ========== SAVE ========== */
+  async function saveZones(clearExisting) {
+    if (!zones.length) { toast('No zones to save', 'err'); return; }
+    if (clearExisting && !confirm('Delete ALL existing zones and replace with canvas?')) return;
+    const payload = zones.map(z => {
+      const b = z.rect.getBoundingRect();
+      const x1 = b.left/CW*100, y1 = b.top/CH*100;
+      const x2 = (b.left+b.width)/CW*100, y2 = (b.top+b.height)/CH*100;
+      return {
+        zone_id: z.id, name: z.id, capacity_units: z.cap || 1,
+        polygon_json: JSON.stringify([[x1,y1],[x2,y1],[x2,y2],[x1,y2]])
+      };
+    });
+    try {
+      const r = await fetch('/admin/zones/bulk', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ camera_id: CAM, zones: payload, clear_existing: clearExisting })
       });
-      
-      try {
-        const resp = await fetch('/admin/zones/bulk', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({ camera_id: cameraId, zones, clear_existing: clearExisting })
-        });
-        const data = await resp.json();
-        if (!resp.ok) { showToast(data.error||'Failed to save','error'); return; }
-        showToast(`Saved ${data.saved} zones successfully!`, 'success');
-      } catch(err) { showToast('Network error: '+err.message, 'error'); }
-    }
-    
-    // ---- Load Existing Zones ----
-    async function loadExistingZones() {
-      try {
-        const resp = await fetch(`/admin/zones.json?camera_id=${cameraId}`);
-        const data = await resp.json();
-        if (!data.zones || !data.zones.length) return;
-        
-        data.zones.forEach((z, i) => {
-          try {
-            const pts = JSON.parse(z.polygon_json || '[]');
-            if (pts.length < 3) return;
-            const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
-            const minX = Math.min(...xs)/100*CW, minY = Math.min(...ys)/100*CH;
-            const maxX = Math.max(...xs)/100*CW, maxY = Math.max(...ys)/100*CH;
-            addZoneBox(minX, minY, maxX-minX, maxY-minY, z.zone_id, z.capacity||1, i%COLORS.length);
-          } catch(e) {}
-        });
-        updateZoneList();
-      } catch(e) {}
-    }
-    
-    // ---- Toast ----
-    function showToast(msg, type) {
-      const old = document.querySelector('.toast');
-      if (old) old.remove();
-      const t = document.createElement('div');
-      t.className = `toast toast-${type}`;
-      t.textContent = msg;
-      document.body.appendChild(t);
-      setTimeout(() => t.remove(), 3000);
-    }
-    
-    // ---- Canvas Selection Sync ----
-    canvas.on('selection:created', e => {
-      const obj = e.selected?.[0];
-      if (obj?._zoneId) highlightListItem(obj._zoneId);
-    });
-    canvas.on('selection:updated', e => {
-      const obj = e.selected?.[0];
-      if (obj?._zoneId) highlightListItem(obj._zoneId);
-    });
-    canvas.on('selection:cleared', () => {
-      document.querySelectorAll('.zone-item').forEach(el => el.classList.remove('selected'));
-    });
-    
-    function highlightListItem(zoneId) {
-      document.querySelectorAll('.zone-item').forEach(el => {
-        el.classList.toggle('selected', el.querySelector('.name')?.textContent === zoneId);
-        if (el.classList.contains('selected')) el.scrollIntoView({ block: 'nearest' });
+      const d = await r.json();
+      if (!r.ok) { toast(d.error||'Save failed', 'err'); return; }
+      toast('Saved ' + d.saved + ' zones \u2713', 'ok');
+    } catch(e) { toast('Network error: ' + e.message, 'err'); }
+  }
+
+  /* ========== LOAD EXISTING ========== */
+  async function loadExisting() {
+    try {
+      const r = await fetch('/admin/zones.json?camera_id=' + CAM);
+      const d = await r.json();
+      if (!d.zones?.length) return;
+      d.zones.forEach((z, i) => {
+        try {
+          const pts = JSON.parse(z.polygon_json || '[]');
+          if (pts.length < 3) return;
+          const xs = pts.map(p=>p[0]), ys = pts.map(p=>p[1]);
+          const minX = Math.min(...xs)/100*CW, minY = Math.min(...ys)/100*CH;
+          const maxX = Math.max(...xs)/100*CW, maxY = Math.max(...ys)/100*CH;
+          addBox(minX, minY, maxX-minX, maxY-minY, z.zone_id, z.capacity||1, i % PAL.length);
+        } catch(e) {}
       });
-    }
-    
-    // ---- Init ----
-    loadBackground();
-    loadExistingZones();
+      refreshList();
+      if (d.zones.length) toast('Loaded ' + d.zones.length + ' existing zones', 'ok');
+    } catch(e) {}
+  }
+
+  /* ========== TOAST ========== */
+  function toast(msg, type) {
+    document.querySelectorAll('.toast').forEach(t => t.remove());
+    const t = document.createElement('div');
+    t.className = 'toast toast-' + type;
+    t.textContent = msg;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+  }
+
+  /* ========== INIT ========== */
+  loadBg();
+  loadExisting();
   </script>
 </body>
 </html>
