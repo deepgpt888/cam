@@ -166,8 +166,8 @@ CREATE TABLE IF NOT EXISTS system_settings (
 
 -- Seed defaults (no-op if already set)
 INSERT INTO system_settings (key, value) VALUES
-    ('operating_hours_start', '6'),
-    ('operating_hours_end',   '18'),
+    ('operating_hours_start', '0'),
+    ('operating_hours_end',   '24'),
     ('scene_diff_threshold',  '6.0')
 ON CONFLICT DO NOTHING;
 

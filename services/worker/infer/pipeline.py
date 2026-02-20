@@ -7,6 +7,7 @@ import time
 import traceback
 from datetime import datetime, timezone
 from typing import Dict, Optional, Tuple
+from zoneinfo import ZoneInfo
 import numpy as np
 from PIL import Image, UnidentifiedImageError
 
@@ -19,9 +20,13 @@ log = logging.getLogger(__name__)
 VALID_CLASSES = {"car", "truck", "motorcycle", "bicycle"}
 
 # Env-var defaults (used before first DB refresh and as fallback)
-_DEFAULT_OPERATING_START    = int(os.getenv("OPERATING_HOURS_START", "6"))
-_DEFAULT_OPERATING_END      = int(os.getenv("OPERATING_HOURS_END",   "18"))
+_DEFAULT_OPERATING_START    = int(os.getenv("OPERATING_HOURS_START", "0"))
+_DEFAULT_OPERATING_END      = int(os.getenv("OPERATING_HOURS_END",   "24"))
 _DEFAULT_SCENE_DIFF_THRESHOLD = float(os.getenv("SCENE_DIFF_THRESHOLD", "6.0"))
+
+# Timezone for operating-hours check — must match the camera's local timezone.
+# Defaults to Asia/Kuala_Lumpur (UTC+8). Override with CAMERA_TZ env var.
+_CAMERA_TZ = ZoneInfo(os.getenv("CAMERA_TZ", "Asia/Kuala_Lumpur"))
 
 # Thumbnail size used for perceptual diff (smaller = faster, 32 is plenty)
 _THUMB = (32, 32)
@@ -118,7 +123,8 @@ class InferencePipeline:
         now = datetime.utcnow()
 
         # ---- Operating hours gate ----
-        local_hour = datetime.now().hour  # server local time
+        # Use camera's local timezone (CAMERA_TZ env var, default Asia/Kuala_Lumpur)
+        local_hour = datetime.now(tz=_CAMERA_TZ).hour
         in_hours = self.operating_start <= local_hour < self.operating_end
         if not in_hours:
             # Outside operating window — record heartbeat, skip inference
