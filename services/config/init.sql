@@ -51,7 +51,7 @@ CREATE TABLE IF NOT EXISTS zones (
     id SERIAL PRIMARY KEY,
     camera_id INT NOT NULL REFERENCES cameras(id) ON DELETE CASCADE,
     zone_id VARCHAR(100) NOT NULL,  -- external ID (e.g., "A01", "A02")
-    name VARCHAR(255),
+    name TEXT,                       -- TEXT: meta zones store large JSON blobs
     polygon_json TEXT NOT NULL,  -- JSON: [[x1,y1], [x2,y2], ...] normalized to 0-100%
     capacity_units INT DEFAULT 1,  -- how many parking spaces in this zone
     created_at TIMESTAMP DEFAULT NOW(),
