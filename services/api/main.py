@@ -1192,6 +1192,10 @@ def admin_zones_json():
         count_full = 0
 
         for z, zs, cam in rows:
+            # Skip lane-metadata sentinel zones (parent outlines, not real spaces)
+            if z.name and z.name.startswith("__campark_meta__"):
+                continue
+
             capacity = z.capacity_units or 1
             occupied = zs.occupied_units or 0
             total_occupied += occupied

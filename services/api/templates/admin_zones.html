@@ -294,16 +294,18 @@
       
       // Zone cards
       const grid = document.getElementById('zone-grid');
-      grid.innerHTML = data.zones.map(zone => {
+      grid.innerHTML = data.zones.filter(z => !(z.name||'').startsWith('__campark_meta__')).map(zone => {
         const occupancyPct = zone.capacity > 0 ? (zone.occupied / zone.capacity * 100) : 0;
         const fillClass = zone.state === 'FULL' ? 'full' : (zone.state === 'PARTIAL' ? 'partial' : '');
+        // Display clean name — strip any meta prefix
+        const displayName = (zone.name || '').startsWith('__campark_meta__') ? zone.zone_id : (zone.name || zone.zone_id);
         
         return `
           <div class="zone-card">
             <div class="header">
               <div>
                 <div class="zone-id">${zone.zone_id}</div>
-                <div class="zone-name">${zone.name || ''}</div>
+                <div class="zone-name">${displayName}</div>
               </div>
               <span class="state-badge state-${zone.state.toLowerCase()}">${zone.state}</span>
             </div>

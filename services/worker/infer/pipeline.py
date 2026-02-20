@@ -215,6 +215,8 @@ class InferencePipeline:
                     vehicle_detections, zone_polygon_px,
                 )
                 occupied_units = len(zone_vehicles)
+                log.info("[%s] Zone %s: %d vehicle(s) detected (capacity=%d)",
+                         camera.camera_id, zone.zone_id, occupied_units, zone.capacity_units or 1)
             else:
                 # Fallback: ZoneClassifier (placeholder or ONNX)
                 prediction = self.zone_classifier.predict_zone_occupied(image, zone_polygon)
