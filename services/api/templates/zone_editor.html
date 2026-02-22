@@ -141,7 +141,7 @@
         </div>
       </div>
       <button class="btn btn-orange" id="btn-split" onclick="splitLane()" disabled>Split into Spaces</button>
-      <p class="hint">Compartments are derived from the lane backbone — dividers prevent any overlap by design. Drag a <b>divider line</b> to fine-tune a boundary.</p>
+      <p class="hint">After splitting, <b>drag any yellow dot</b> to fine-tune that corner. Each dot moves independently — only the edges connected to it stretch.</p>
     </div>
 
     <!-- Step 3: Fine-tune list -->
@@ -150,7 +150,7 @@
       <div class="cnt">Lanes: <b id="gcnt">0</b> &nbsp; Spaces: <b id="scnt">0</b></div>
       <div class="zone-list" id="zlist"><div style="color:var(--text-secondary);font-size:12px;">No zones yet.</div></div>
       <p class="hint" style="margin-top:8px;">
-        <b>No visible handles.</b> Drag near a <b>corner</b> to warp backbone, near a <b>divider line</b> to shift that boundary (slow gain), or drag <b>inside</b> to move. Cursor changes to indicate action.
+        Every intersection is an independent <b>yellow dot</b>. Drag any dot to reposition it — only the edges connected to that dot move. All other dots stay exactly where they are.
       </p>
     </div>
 
@@ -320,499 +320,569 @@ const PAL=[
 let palIdx=0;
 
 /* ================================================================
-   DATA MODEL — LaneArea ONLY
-   Children (compartments) are derived at render/save time from
-   quad + dividersU + dividersV. Never stored as independent polygons.
+   DATA MODEL — LaneArea with point grid
+   Children are derived at render/save time from pts[][].
+   No divider arrays — every intersection is an independent anchor.
 
    LaneArea {
-     uuid:      string
-     quad:      [{x,y}×4]   // TL,TR,BR,BL normalized 0..1
-     prefix:    string
-     start:     number       // global first index for this lane
-     cols:      number       // 0 = unsplit
-     rows:      number
-     dir:       'inc'|'dec'
-     gapPct:    number
-     dividersU: number[]     // length cols+1, [0..1] sorted
-     dividersV: number[]     // length rows+1, [0..1] sorted
-     ci:        number       // palette index
+     uuid:    string
+     pts:     {x,y}[][]   // [rows+1][cols+1] normalized 0..1
+                           // pts[row][col] — row 0=top, row rows=bottom
+     prefix:  string
+     start:   number
+     cols:    number       // 0 = unsplit
+     rows:    number
+     dir:     'inc'|'dec'
+     gapPct:  number
+     ci:      number       // palette index
    }
 ================================================================ */
 const CAM="{{ camera_id }}";
 let SW=1,SH=1;
 
 let lanes=[];        // LaneArea[]
-let selectedId=null; // uuid | null
+let selectedId=null; // uuid of selected lane
 let pendingId=null;  // uuid of lane waiting to be split
 
 const DRAW='draw',EDIT='edit',IDLE='idle';
 let mode=IDLE;
-let drawPts=[];      // screen {x,y} while drawing
+let drawPts=[];      // screen {x,y} while drawing 4 corners
 
 /* ----------------------------------------------------------------
-   Drag state
-   {
-     kind:       'corner'|'divU'|'divV'|'move'
-     laneId:     string
-     cornerIdx:  number       (corner only)
-     divIdx:     number       (divU/divV only)
-     origQuad:   [{x,y}×4]   (corner/move)
-     origDivU:   number[]     (divU)
-     origDivV:   number[]     (divV)
-     sx,sy:      number       screen start position
-   }
+   Dot selection state (click-to-select, then drag selected dot)
+   activeDot = { laneId, row, col } | null
+---------------------------------------------------------------- */
+let activeDot=null;
+
+/* ----------------------------------------------------------------
+   Drag state — only for moving an active dot
+   { laneId, row, col, origPt:{x,y}, sx, sy }
 ---------------------------------------------------------------- */
 let drag=null;
 
-const MIN_GAP=0.012;   // minimum UV spacing between adjacent dividers
-const FINE_GAIN=0.35;  // divider drag attenuation (slow fine-tune)
-const HIT_CORNER=18;   // px
-const HIT_DIV=9;       // px
+const DOT_RADIUS  = 7;    // px — visual size of anchor dots
+const HIT_DOT     = 14;   // px — click hit radius for dots
+const HIT_CORNER  = 18;   // px — outer corner dots get slightly bigger hit area
+const DRAG_GAIN   = 0.45; // sensitivity multiplier — lower = more precise
 
-let konva,layer;
+let konva, layer;
 
 /* ================================================================
    INIT
 ================================================================ */
-window.addEventListener('DOMContentLoaded',()=>loadBg());
+window.addEventListener('DOMContentLoaded', () => loadBg());
 
-function initKonva(w,h){
-  SW=w;SH=h;
-  konva=new Konva.Stage({container:'k-wrap',width:SW,height:SH});
-  layer=new Konva.Layer();
+function initKonva(w, h) {
+  SW = w; SH = h;
+  konva = new Konva.Stage({ container: 'k-wrap', width: SW, height: SH });
+  layer = new Konva.Layer();
   konva.add(layer);
-  konva.on('mousedown touchstart',onDown);
-  konva.on('mousemove touchmove',onMove);
-  konva.on('mouseup touchend',onUp);
-  document.addEventListener('keydown',e=>{
-    if(e.target.tagName==='INPUT'||e.target.tagName==='SELECT')return;
-    if(e.key==='Delete'||e.key==='Backspace')deleteSelected();
-    if(e.key==='Escape'){if(mode===DRAW)cancelDraw();else deselect();}
+  konva.on('mousedown touchstart', onDown);
+  konva.on('mousemove touchmove',  onMove);
+  konva.on('mouseup touchend',     onUp);
+  document.addEventListener('keydown', e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+    if (e.key === 'Delete' || e.key === 'Backspace') deleteSelected();
+    if (e.key === 'Escape') {
+      if (mode === DRAW) cancelDraw();
+      else { activeDot = null; deselect(); }
+    }
   });
 }
 
 /* ================================================================
    BACKGROUND
 ================================================================ */
-function loadBg(){
+function loadBg() {
   fetch(`/api/v1/cameras/${CAM}/snapshot-latest`)
-    .then(r=>r.ok?r.blob():null)
-    .then(blob=>{
-      if(!blob){noBg();return;}
-      const url=URL.createObjectURL(blob);
-      const img=new window.Image();
-      img.onload=()=>{
-        const box=document.querySelector('.canvas-body');
-        const mW=box.clientWidth-4,mH=box.clientHeight-4;
-        const sc=Math.min(mW/img.width,mH/img.height,1);
-        SW=Math.round(img.width*sc);SH=Math.round(img.height*sc);
-        initKonva(SW,SH);
-        Konva.Image.fromURL(url,ki=>{
-          ki.setAttrs({x:0,y:0,width:SW,height:SH,listening:false});
-          layer.add(ki);layer.batchDraw();
+    .then(r => r.ok ? r.blob() : null)
+    .then(blob => {
+      if (!blob) { noBg(); return; }
+      const url = URL.createObjectURL(blob);
+      const img = new window.Image();
+      img.onload = () => {
+        const box = document.querySelector('.canvas-body');
+        const mW = box.clientWidth - 4, mH = box.clientHeight - 4;
+        const sc = Math.min(mW / img.width, mH / img.height, 1);
+        SW = Math.round(img.width * sc); SH = Math.round(img.height * sc);
+        initKonva(SW, SH);
+        Konva.Image.fromURL(url, ki => {
+          ki.setAttrs({ x: 0, y: 0, width: SW, height: SH, listening: false });
+          layer.add(ki); layer.batchDraw();
         });
         loadExisting();
       };
-      img.src=url;
+      img.src = url;
     })
-    .catch(()=>noBg());
+    .catch(() => noBg());
 }
-function noBg(){
-  const box=document.querySelector('.canvas-body');
-  SW=box.clientWidth-4;SH=box.clientHeight-4;
-  initKonva(SW,SH);
-  layer.add(new Konva.Text({x:SW/2,y:SH/2,
-    text:'No snapshot — upload via FTP first',
-    fontSize:15,fill:'#94a3b8',align:'center',offsetX:160,listening:false}));
-  layer.batchDraw();loadExisting();
+function noBg() {
+  const box = document.querySelector('.canvas-body');
+  SW = box.clientWidth - 4; SH = box.clientHeight - 4;
+  initKonva(SW, SH);
+  layer.add(new Konva.Text({
+    x: SW/2, y: SH/2,
+    text: 'No snapshot — upload via FTP first',
+    fontSize: 15, fill: '#94a3b8', align: 'center', offsetX: 160, listening: false
+  }));
+  layer.batchDraw();
+  loadExisting();
 }
 
 /* ================================================================
    COORD HELPERS
 ================================================================ */
-const toN=(sx,sy)=>({x:sx/SW,y:sy/SH});
-const toS=(p)=>({x:p.x*SW,y:p.y*SH});
-const qToS=(q)=>q.map(toS);
+const toN  = (sx, sy) => ({ x: sx / SW, y: sy / SH });
+const toS  = p        => ({ x: p.x * SW, y: p.y * SH });
+const qToS = q        => q.map(toS);
+function getPtr() { return konva.getPointerPosition() || { x: 0, y: 0 }; }
+
+/* ================================================================
+   POINT GRID HELPERS
+   pts[r][c] — (rows+1) rows × (cols+1) cols, normalized
+================================================================ */
+
+/* Build a fresh uniform grid from a quad [TL,TR,BR,BL] */
+function buildGrid(quad, cols, rows) {
+  const [TL, TR, BR, BL] = quad;
+  const grid = [];
+  for (let r = 0; r <= rows; r++) {
+    const v = r / rows;
+    const row = [];
+    for (let c = 0; c <= cols; c++) {
+      const u = c / cols;
+      row.push({
+        x: TL.x*(1-u)*(1-v) + TR.x*u*(1-v) + BR.x*u*v + BL.x*(1-u)*v,
+        y: TL.y*(1-u)*(1-v) + TR.y*u*(1-v) + BR.y*u*v + BL.y*(1-u)*v,
+      });
+    }
+    grid.push(row);
+  }
+  return grid;
+}
+
+/* Get screen-space position of a grid dot */
+function dotS(la, r, c) {
+  return toS(la.pts[r][c]);
+}
+
+/* Cell corners for child [r,c] as 4 screen points [TL,TR,BR,BL] */
+function cellCorners(la, r, c) {
+  return [
+    dotS(la, r,   c),
+    dotS(la, r,   c+1),
+    dotS(la, r+1, c+1),
+    dotS(la, r+1, c),
+  ];
+}
+
+/* Cell corners in normalized space */
+function cellCornersN(la, r, c) {
+  return [
+    la.pts[r][c],
+    la.pts[r][c+1],
+    la.pts[r+1][c+1],
+    la.pts[r+1][c],
+  ];
+}
+
+/* Is this dot an outer-boundary dot? */
+function isOuterDot(la, r, c) {
+  return r === 0 || r === la.rows || c === 0 || c === la.cols;
+}
 
 /* ================================================================
    DRAW MODE
 ================================================================ */
-function startDraw(){
-  if(mode===DRAW)return;
+function startDraw() {
+  if (mode === DRAW) return;
   cancelDraw(false);
-  mode=DRAW;drawPts=[];
+  mode = DRAW; drawPts = [];
+  activeDot = null;
   deselect();
   document.getElementById('btn-draw').classList.add('active');
-  document.getElementById('btn-cancel').style.display='';
+  document.getElementById('btn-cancel').style.display = '';
   document.getElementById('b1').classList.add('on');
   document.getElementById('c1').classList.add('hl');
-  setFooter('DRAW MODE — click 4 corner points of the lane boundary',true);
+  setFooter('DRAW MODE — click 4 corner points of the lane boundary', true);
   updDS();
-  konva.container().style.cursor='crosshair';
+  konva.container().style.cursor = 'crosshair';
 }
 
-function cancelDraw(reset=true){
-  drawPts=[];
-  if(reset)mode=IDLE;
+function cancelDraw(reset = true) {
+  drawPts = [];
+  if (reset) mode = IDLE;
   document.getElementById('btn-draw').classList.remove('active');
-  document.getElementById('btn-cancel').style.display='none';
+  document.getElementById('btn-cancel').style.display = 'none';
   document.getElementById('b1').classList.remove('on');
   document.getElementById('c1').classList.remove('hl');
-  setFooter('Click <b>Draw Lane</b> then click <b>4 corner points</b>.',false);
-  updDS();redraw();
-  konva.container().style.cursor='';
+  setFooter('Click <b>Draw Lane</b> then click <b>4 corner points</b>.', false);
+  updDS(); redraw();
+  konva.container().style.cursor = '';
 }
 
-function updDS(){
-  const el=document.getElementById('ds');
-  if(mode===DRAW){
-    el.className='draw-status show';
-    el.textContent=drawPts.length+' / 4 points'+(drawPts.length>0?' — click next corner':'');
-  }else{el.className='draw-status';}
+function updDS() {
+  const el = document.getElementById('ds');
+  if (mode === DRAW) {
+    el.className = 'draw-status show';
+    el.textContent = drawPts.length + ' / 4 points' + (drawPts.length > 0 ? ' — click next corner' : '');
+  } else { el.className = 'draw-status'; }
 }
 
 /* ================================================================
    EVENTS
 ================================================================ */
-function getPtr(){return konva.getPointerPosition()||{x:0,y:0};}
+function onDown() {
+  const pos = getPtr();
 
-function onDown(){
-  const pos=getPtr();
-
-  if(mode===DRAW){
-    drawPts.push({x:pos.x,y:pos.y});
+  /* ---- DRAW MODE: collect corner points ---- */
+  if (mode === DRAW) {
+    drawPts.push({ x: pos.x, y: pos.y });
     updDS();
-    if(drawPts.length===4)finishDraw();
+    if (drawPts.length === 4) finishDraw();
     else redraw();
     return;
   }
 
-  const hit=hitTest(pos);
-  if(!hit){deselect();return;}
-
-  selectedId=hit.laneId;
-  konva.container().style.cursor='grabbing';
-  redraw();
-
-  const la=lanes.find(l=>l.uuid===hit.laneId);
-  if(!la)return;
-
-  if(hit.kind==='corner'){
-    drag={kind:'corner',laneId:hit.laneId,cornerIdx:hit.idx,
-      origQuad:la.quad.map(p=>({...p})),sx:pos.x,sy:pos.y};
-  }else if(hit.kind==='divU'){
-    drag={kind:'divU',laneId:hit.laneId,divIdx:hit.idx,
-      origDivU:[...la.dividersU],sx:pos.x,sy:pos.y};
-  }else if(hit.kind==='divV'){
-    drag={kind:'divV',laneId:hit.laneId,divIdx:hit.idx,
-      origDivV:[...la.dividersV],sx:pos.x,sy:pos.y};
-  }else if(hit.kind==='move'){
-    if(la.cols>0&&la.rows>0)return;
-    drag={kind:'move',laneId:hit.laneId,
-      origQuad:la.quad.map(p=>({...p})),sx:pos.x,sy:pos.y};
-  }
-}
-
-function onMove(){
-  const pos=getPtr();
-
-  if(!drag){
-    const hit=hitTest(pos);
-    konva.container().style.cursor=hit?cursorForHit(hit):(mode===DRAW?'crosshair':'default');
+  /* ---- If a dot is already active (glowing), move it to click pos ---- */
+  if (activeDot) {
+    const la = lanes.find(l => l.uuid === activeDot.laneId);
+    if (la) {
+      la.pts[activeDot.row][activeDot.col] = G.clampN(toN(pos.x, pos.y));
+    }
+    activeDot = null;
+    konva.container().style.cursor = 'default';
+    redraw(); refreshList();
     return;
   }
 
-  const la=lanes.find(l=>l.uuid===drag.laneId);
-  if(!la)return;
+  /* ---- Try to hit a dot ---- */
+  const hit = hitDot(pos);
+  if (hit) {
+    selectedId = hit.laneId;
+    activeDot  = hit;
+    konva.container().style.cursor = 'crosshair';
+    redraw();
+    setFooter('Dot selected — <b>drag</b> it or <b>click</b> where you want it. Press <b>Esc</b> to cancel.', true);
 
-  if(drag.kind==='corner'){
-    const dx=(pos.x-drag.sx)/SW,dy=(pos.y-drag.sy)/SH;
-    const q=drag.origQuad.map(p=>({...p}));
-    q[drag.cornerIdx]=G.clampN({x:q[drag.cornerIdx].x+dx,y:q[drag.cornerIdx].y+dy});
-    if(G.isConvex(q))la.quad=q;
-
-  }else if(drag.kind==='divU'){
-    /* Project current pointer onto quad u-axis; apply fine gain */
-    const startUV=G.imgToUv(la.quad,toN(drag.sx,drag.sy));
-    const curUV=G.imgToUv(la.quad,toN(pos.x,pos.y));
-    const delta=(curUV.u-startUV.u)*FINE_GAIN;
-    const d=[...drag.origDivU];
-    const k=drag.divIdx;
-    d[k]=Math.min((d[k+1]??1)-MIN_GAP,Math.max((d[k-1]??0)+MIN_GAP,d[k]+delta));
-    la.dividersU=d;
-
-  }else if(drag.kind==='divV'){
-    const startUV=G.imgToUv(la.quad,toN(drag.sx,drag.sy));
-    const curUV=G.imgToUv(la.quad,toN(pos.x,pos.y));
-    const delta=(curUV.v-startUV.v)*FINE_GAIN;
-    const d=[...drag.origDivV];
-    const k=drag.divIdx;
-    d[k]=Math.min((d[k+1]??1)-MIN_GAP,Math.max((d[k-1]??0)+MIN_GAP,d[k]+delta));
-    la.dividersV=d;
-
-  }else if(drag.kind==='move'){
-    const dx=(pos.x-drag.sx)/SW,dy=(pos.y-drag.sy)/SH;
-    la.quad=drag.origQuad.map(p=>G.clampN({x:p.x+dx,y:p.y+dy}));
+    /* Also start drag immediately in case user prefers dragging */
+    const la = lanes.find(l => l.uuid === hit.laneId);
+    if (la) {
+      drag = {
+        laneId: hit.laneId,
+        row: hit.row, col: hit.col,
+        origPt: { ...la.pts[hit.row][hit.col] },
+        sx: pos.x, sy: pos.y,
+      };
+    }
+    return;
   }
 
-  redraw();
+  /* ---- Click in empty space — deselect ---- */
+  activeDot = null;
+  drag = null;
+  deselect();
 }
 
-function onUp(){
-  if(drag){drag=null;refreshList();}
-  konva.container().style.cursor=mode===DRAW?'crosshair':'default';
+function onMove() {
+  const pos = getPtr();
+
+  /* Live drag of active dot */
+  if (drag) {
+    const la = lanes.find(l => l.uuid === drag.laneId);
+    if (la) {
+      const dx = (pos.x - drag.sx) / SW * DRAG_GAIN;
+      const dy = (pos.y - drag.sy) / SH * DRAG_GAIN;
+      la.pts[drag.row][drag.col] = G.clampN({
+        x: drag.origPt.x + dx,
+        y: drag.origPt.y + dy,
+      });
+      redraw();
+    }
+    return;
+  }
+
+  /* Cursor hint — show crosshair when hovering a dot */
+  if (mode !== DRAW) {
+    const hit = hitDot(pos);
+    konva.container().style.cursor = hit ? 'crosshair' : 'default';
+  }
+}
+
+function onUp() {
+  if (drag) {
+    drag = null;
+    activeDot = null;
+    konva.container().style.cursor = 'default';
+    refreshList();
+    setFooter('Click <b>Draw Lane</b> then click <b>4 corner points</b>.', false);
+  }
 }
 
 /* ================================================================
-   HIT TESTING
-   Priority: corners > internal dividers > inside (move)
+   HIT TESTING — only dots, no lines, no fill
 ================================================================ */
-function hitTest(pos){
-  for(const la of [...lanes].reverse()){
-    const qpx=qToS(la.quad);
-
-    /* 1) Parent corners (highest priority) */
-    for(let i=0;i<4;i++){
-      if(G.dist(pos,qpx[i])<HIT_CORNER)return{kind:'corner',laneId:la.uuid,idx:i};
-    }
-
-    /* Only continue if pointer is inside or near the lane outline */
-    if(!G.ptInPoly(pos,qpx)&&!nearBorder(pos,qpx,HIT_DIV+4))continue;
-
-    /* 2) Internal U-dividers (skip boundary indices 0 and last) */
-    if(la.dividersU){
-      for(let k=1;k<la.dividersU.length-1;k++){
-        const u=la.dividersU[k];
-        const a=toS(G.uvToImg(la.quad,u,0));
-        const b=toS(G.uvToImg(la.quad,u,1));
-        if(G.ptSegDist(pos,a,b)<HIT_DIV)return{kind:'divU',laneId:la.uuid,idx:k};
+function hitDot(pos) {
+  /* Reverse order so top lanes get priority */
+  for (const la of [...lanes].reverse()) {
+    if (!la.pts || la.cols < 1) continue;
+    for (let r = 0; r <= la.rows; r++) {
+      for (let c = 0; c <= la.cols; c++) {
+        const sp = dotS(la, r, c);
+        const radius = isOuterDot(la, r, c) ? HIT_CORNER : HIT_DOT;
+        if (G.dist(pos, sp) < radius) {
+          return { laneId: la.uuid, row: r, col: c };
+        }
       }
-    }
-
-    /* 3) Internal V-dividers */
-    if(la.dividersV){
-      for(let k=1;k<la.dividersV.length-1;k++){
-        const v=la.dividersV[k];
-        const a=toS(G.uvToImg(la.quad,0,v));
-        const b=toS(G.uvToImg(la.quad,1,v));
-        if(G.ptSegDist(pos,a,b)<HIT_DIV)return{kind:'divV',laneId:la.uuid,idx:k};
-      }
-    }
-
-    /* 4) Inside → move whole lane (disabled after split) */
-    if(G.ptInPoly(pos,qpx)){
-      const hasSplit=la.cols>0&&la.rows>0;
-      if(!hasSplit)return{kind:'move',laneId:la.uuid};
     }
   }
   return null;
 }
 
-function nearBorder(pos,qpx,r){
-  for(let i=0;i<4;i++){if(G.ptSegDist(pos,qpx[i],qpx[(i+1)%4])<r)return true;}
-  return false;
-}
-
-function cursorForHit(h){
-  if(!h)return'default';
-  const corners=['nwse-resize','nesw-resize','nwse-resize','nesw-resize'];
-  if(h.kind==='corner')return corners[h.idx]||'crosshair';
-  if(h.kind==='divU')return'col-resize';
-  if(h.kind==='divV')return'row-resize';
-  if(h.kind==='move')return'move';
-  return'default';
-}
-
 /* ================================================================
-   FINISH DRAW — creates a bare LaneArea (unsplit)
+   FINISH DRAW — creates a bare LaneArea (unsplit, 1×1 grid)
 ================================================================ */
-function finishDraw(){
-  const quad=G.orderQuad(drawPts.map(p=>toN(p.x,p.y)));
-  const id=uuid();
-  const ci=palIdx++%PAL.length;
-  lanes.push({uuid:id,quad,prefix:'A',start:1,cols:0,rows:0,
-    dir:'inc',gapPct:2,dividersU:[0,1],dividersV:[0,1],ci});
-  pendingId=id;
-  selectedId=id;
-  document.getElementById('btn-split').disabled=false;
+function finishDraw() {
+  const quad = G.orderQuad(drawPts.map(p => toN(p.x, p.y)));
+  const id = uuid();
+  const ci = palIdx++ % PAL.length;
+  /* Unsplit lane — pts is just the 4 corners as a 2×2 grid */
+  const pts = buildGrid(quad, 1, 1);
+  lanes.push({
+    uuid: id, pts,
+    /* Store quad separately for unsplit state rendering */
+    quad,
+    prefix: 'A', start: 1, cols: 0, rows: 0,
+    dir: 'inc', gapPct: 2, ci,
+  });
+  pendingId  = id;
+  selectedId = id;
+  document.getElementById('btn-split').disabled = false;
   document.getElementById('b2').classList.add('on');
   document.getElementById('c2').classList.add('hl');
   cancelDraw(true);
-  mode=EDIT;
-  redraw();refreshList();
-  toast('Lane drawn — set spaces/rows and click Split.','ok');
+  mode = EDIT;
+  redraw(); refreshList();
+  toast('Lane drawn — set spaces/rows and click Split.', 'ok');
 }
 
 /* ================================================================
-   SPLIT — initialises uniform dividers on the pending lane
+   SPLIT — build (rows+1)×(cols+1) point grid from current quad
 ================================================================ */
-function splitLane(){
-  if(!pendingId){toast('Draw a lane first','err');return;}
-  const la=lanes.find(l=>l.uuid===pendingId);
-  if(!la){toast('Lane not found','err');return;}
+function splitLane() {
+  if (!pendingId) { toast('Draw a lane first', 'err'); return; }
+  const la = lanes.find(l => l.uuid === pendingId);
+  if (!la) { toast('Lane not found', 'err'); return; }
 
-  const cols=Math.max(1,parseInt(document.getElementById('inp-cols').value)||5);
-  const rows=Math.max(1,parseInt(document.getElementById('inp-rows').value)||1);
-  const prefix=(document.getElementById('inp-prefix').value||'A').trim()||'A';
-  const gapPct=parseFloat(document.getElementById('inp-gap').value)||0;
-  const dir=document.getElementById('inp-dir').value;
+  const cols   = Math.max(1, parseInt(document.getElementById('inp-cols').value)  || 5);
+  const rows   = Math.max(1, parseInt(document.getElementById('inp-rows').value)  || 1);
+  const prefix = (document.getElementById('inp-prefix').value || 'A').trim() || 'A';
+  const gapPct = parseFloat(document.getElementById('inp-gap').value) || 0;
+  const dir    = document.getElementById('inp-dir').value;
 
-  /* Global naming: count lanes ALREADY split with same prefix (exclude self) */
-  const start=N.nextStart(lanes.filter(l=>l.uuid!==pendingId),prefix);
+  const start = N.nextStart(lanes.filter(l => l.uuid !== pendingId), prefix);
 
-  la.cols=cols;la.rows=rows;la.prefix=prefix;la.start=start;
-  la.dir=dir;la.gapPct=gapPct;
-  la.dividersU=Array.from({length:cols+1},(_,i)=>i/cols);
-  la.dividersV=Array.from({length:rows+1},(_,i)=>i/rows);
+  la.cols   = cols;
+  la.rows   = rows;
+  la.prefix = prefix;
+  la.start  = start;
+  la.dir    = dir;
+  la.gapPct = gapPct;
+  /* Build uniform grid from the original quad */
+  la.pts    = buildGrid(la.quad, cols, rows);
 
-  const total=cols*rows;
-  const lbls=N.labels(la);
+  const total = cols * rows;
+  const lbls  = N.labels(la);
 
-  document.getElementById('btn-split').disabled=true;
+  document.getElementById('btn-split').disabled = true;
   document.getElementById('b2').classList.remove('on');
   document.getElementById('c2').classList.remove('hl');
   document.getElementById('b3').classList.add('on');
   document.getElementById('c3').classList.add('hl');
-  setTimeout(()=>{
+  setTimeout(() => {
     document.getElementById('b3').classList.remove('on');
     document.getElementById('c3').classList.remove('hl');
-  },2500);
+  }, 2500);
 
-  pendingId=null;
-  selectedId=la.uuid;
-  redraw();refreshList();
-  toast(`Generated ${total} spaces (${lbls[0]}–${lbls[total-1]}). Drag dividers to fine-tune.`,'ok');
+  pendingId  = null;
+  selectedId = la.uuid;
+  redraw(); refreshList();
+  toast(`Generated ${total} spaces (${lbls[0]}–${lbls[total-1]}). Click any dot to fine-tune.`, 'ok');
 }
 
 /* ================================================================
-   RENDER — Milesight-style
-   For each LaneArea:
-     1. Compartment fills (derived from dividers)
-     2. Parent outline (solid, always visible)
-     3. Internal divider lines (dashed)
-     4. Labels at compartment centroids
+   RENDER
 ================================================================ */
-function redraw(){
-  layer.find('._z').forEach(n=>n.destroy());
+function redraw() {
+  layer.find('._z').forEach(n => n.destroy());
 
   /* Draw-mode preview */
-  if(mode===DRAW){
-    drawPts.forEach((p,i)=>{
-      layer.add(new Konva.Circle({x:p.x,y:p.y,radius:i===0?7:5,
-        fill:i===0?'#f97316':'#fff',stroke:'#f97316',strokeWidth:2,
-        listening:false,name:'_z'}));
-      if(i>0){
-        const pv=drawPts[i-1];
-        layer.add(new Konva.Line({points:[pv.x,pv.y,p.x,p.y],
-          stroke:'#f97316',strokeWidth:2,dash:[6,4],listening:false,name:'_z'}));
+  if (mode === DRAW) {
+    drawPts.forEach((p, i) => {
+      layer.add(new Konva.Circle({
+        x: p.x, y: p.y, radius: i === 0 ? 7 : 5,
+        fill: i === 0 ? '#f97316' : '#fff',
+        stroke: '#f97316', strokeWidth: 2,
+        listening: false, name: '_z',
+      }));
+      if (i > 0) {
+        const pv = drawPts[i-1];
+        layer.add(new Konva.Line({
+          points: [pv.x, pv.y, p.x, p.y],
+          stroke: '#f97316', strokeWidth: 2, dash: [6, 4],
+          listening: false, name: '_z',
+        }));
       }
     });
-    if(drawPts.length>=3){
-      const last=drawPts[drawPts.length-1],first=drawPts[0];
-      layer.add(new Konva.Line({points:[last.x,last.y,first.x,first.y],
-        stroke:'rgba(249,115,22,.35)',strokeWidth:1.5,dash:[4,8],
-        listening:false,name:'_z'}));
+    if (drawPts.length >= 3) {
+      const last = drawPts[drawPts.length-1], first = drawPts[0];
+      layer.add(new Konva.Line({
+        points: [last.x, last.y, first.x, first.y],
+        stroke: 'rgba(249,115,22,.35)', strokeWidth: 1.5, dash: [4, 8],
+        listening: false, name: '_z',
+      }));
     }
   }
 
-  lanes.forEach(la=>{
-    const isSel=selectedId===la.uuid;
-    const c=PAL[la.ci%PAL.length];
-    const qpx=qToS(la.quad);
-    const hasSplit=la.cols>0&&la.rows>0;
+  lanes.forEach(la => {
+    const isSel = selectedId === la.uuid;
+    const c     = PAL[la.ci % PAL.length];
+    const hasSplit = la.cols > 0 && la.rows > 0;
 
-    if(hasSplit){
-      const g=la.gapPct/100;
+    if (hasSplit) {
+      const g = la.gapPct / 100;
 
-      /* 1) Compartment fills */
-      for(let r=0;r<la.rows;r++){
-        const v0=la.dividersV[r],v1=la.dividersV[r+1];
-        const rg=g*0.5/Math.max(la.rows,1);
-        for(let col=0;col<la.cols;col++){
-          const u0=la.dividersU[col],u1=la.dividersU[col+1];
-          const cg=g*0.5/Math.max(la.cols,1);
-          const cellPx=qToS(G.cellQuad(la.quad,u0+cg,u1-cg,v0+rg,v1-rg));
+      /* 1) Child zone fills */
+      for (let r = 0; r < la.rows; r++) {
+        for (let col = 0; col < la.cols; col++) {
+          /* Apply visual gap by lerping corners slightly inward */
+          const [TL, TR, BR, BL] = cellCornersN(la, r, col);
+          const cx = (TL.x + TR.x + BR.x + BL.x) / 4;
+          const cy = (TL.y + TR.y + BR.y + BL.y) / 4;
+          const shrink = pt => ({
+            x: pt.x + (cx - pt.x) * g,
+            y: pt.y + (cy - pt.y) * g,
+          });
+          const cellPx = [TL, TR, BR, BL].map(shrink).map(toS);
           layer.add(new Konva.Line({
-            points:cellPx.flatMap(p=>[p.x,p.y]),
-            closed:true,
-            fill:isSel?c.fill.replace('.18','.30'):c.fill,
-            stroke:'transparent',strokeWidth:0,
-            listening:false,name:'_z',
+            points: cellPx.flatMap(p => [p.x, p.y]),
+            closed: true,
+            fill: isSel ? c.fill.replace('.18', '.28') : c.fill,
+            stroke: isSel ? '#fff' : c.stroke,
+            strokeWidth: isSel ? 1.8 : 1.3,
+            listening: false, name: '_z',
           }));
         }
       }
 
-      /* 2) Parent outline */
-      layer.add(new Konva.Line({
-        points:qpx.flatMap(p=>[p.x,p.y]),
-        closed:true,fill:'transparent',
-        stroke:isSel?'#fff':c.stroke,
-        strokeWidth:isSel?2.5:1.8,
-        listening:false,name:'_z',
-      }));
-
-      /* 3) Internal U-divider lines */
-      for(let k=1;k<la.dividersU.length-1;k++){
-        const u=la.dividersU[k];
-        const a=toS(G.uvToImg(la.quad,u,0));
-        const b=toS(G.uvToImg(la.quad,u,1));
-        layer.add(new Konva.Line({
-          points:[a.x,a.y,b.x,b.y],
-          stroke:isSel?'rgba(255,255,255,.7)':c.stroke,
-          strokeWidth:isSel?1.5:1.0,dash:[4,3],
-          listening:false,name:'_z',
-        }));
+      /* 2) Grid lines — connect every adjacent dot with a line */
+      /* Horizontal lines (along each row) */
+      for (let r = 0; r <= la.rows; r++) {
+        for (let col = 0; col < la.cols; col++) {
+          const a = dotS(la, r, col);
+          const b = dotS(la, r, col + 1);
+          const isOuter = (r === 0 || r === la.rows);
+          layer.add(new Konva.Line({
+            points: [a.x, a.y, b.x, b.y],
+            stroke: isSel ? (isOuter ? '#fff' : 'rgba(255,255,255,.6)') : (isOuter ? c.stroke : c.stroke),
+            strokeWidth: isOuter ? (isSel ? 2.2 : 1.8) : (isSel ? 1.4 : 1.0),
+            dash: isOuter ? [] : [4, 3],
+            listening: false, name: '_z',
+          }));
+        }
+      }
+      /* Vertical lines (along each col) */
+      for (let col = 0; col <= la.cols; col++) {
+        for (let r = 0; r < la.rows; r++) {
+          const a = dotS(la, r, col);
+          const b = dotS(la, r + 1, col);
+          const isOuter = (col === 0 || col === la.cols);
+          layer.add(new Konva.Line({
+            points: [a.x, a.y, b.x, b.y],
+            stroke: isSel ? (isOuter ? '#fff' : 'rgba(255,255,255,.6)') : (isOuter ? c.stroke : c.stroke),
+            strokeWidth: isOuter ? (isSel ? 2.2 : 1.8) : (isSel ? 1.4 : 1.0),
+            dash: isOuter ? [] : [4, 3],
+            listening: false, name: '_z',
+          }));
+        }
       }
 
-      /* 4) Internal V-divider lines */
-      for(let k=1;k<la.dividersV.length-1;k++){
-        const v=la.dividersV[k];
-        const a=toS(G.uvToImg(la.quad,0,v));
-        const b=toS(G.uvToImg(la.quad,1,v));
-        layer.add(new Konva.Line({
-          points:[a.x,a.y,b.x,b.y],
-          stroke:isSel?'rgba(255,255,255,.7)':c.stroke,
-          strokeWidth:isSel?1.5:1.0,dash:[4,3],
-          listening:false,name:'_z',
-        }));
+      /* 3) Anchor dots — rendered on top of lines */
+      for (let r = 0; r <= la.rows; r++) {
+        for (let col = 0; col <= la.cols; col++) {
+          const sp   = dotS(la, r, col);
+          const isActive = activeDot &&
+                           activeDot.laneId === la.uuid &&
+                           activeDot.row === r &&
+                           activeDot.col === col;
+          const outer = isOuterDot(la, r, col);
+
+          /* Glow ring for active dot */
+          if (isActive) {
+            layer.add(new Konva.Circle({
+              x: sp.x, y: sp.y, radius: DOT_RADIUS + 6,
+              fill: 'rgba(249,115,22,.25)',
+              stroke: '#f97316', strokeWidth: 1.5,
+              listening: false, name: '_z',
+            }));
+          }
+
+          layer.add(new Konva.Circle({
+            x: sp.x, y: sp.y,
+            radius: isActive ? DOT_RADIUS + 2 : (outer ? DOT_RADIUS : DOT_RADIUS - 1),
+            fill: isActive ? '#f97316' : (outer ? '#fff' : 'rgba(255,255,255,.75)'),
+            stroke: isActive ? '#fff' : c.stroke,
+            strokeWidth: 2,
+            listening: false, name: '_z',
+          }));
+        }
       }
 
-      /* 5) Compartment labels */
-      const lbls=N.labels(la);
-      let idx=0;
-      for(let r=0;r<la.rows;r++){
-        const v0=la.dividersV[r],v1=la.dividersV[r+1];
-        for(let col=0;col<la.cols;col++){
-          const u0=la.dividersU[col],u1=la.dividersU[col+1];
-          const cp=toS(G.uvToImg(la.quad,(u0+u1)/2,(v0+v1)/2));
-          const lbl=new Konva.Text({x:cp.x,y:cp.y,
-            text:lbls[idx++]||'',
-            fontSize:Math.max(9,Math.min(13,SW/90)),
-            fill:'#fff',fontStyle:'bold',align:'center',
-            shadowColor:'rgba(0,0,0,.9)',shadowBlur:3,
-            shadowOffsetX:1,shadowOffsetY:1,
-            listening:false,name:'_z'});
-          lbl.offsetX(lbl.width()/2);lbl.offsetY(lbl.height()/2);
+      /* 4) Labels at cell centroids */
+      const lbls = N.labels(la);
+      let idx = 0;
+      for (let r = 0; r < la.rows; r++) {
+        for (let col = 0; col < la.cols; col++) {
+          const corners = cellCornersN(la, r, col);
+          const cp = toS({
+            x: corners.reduce((s, p) => s + p.x, 0) / 4,
+            y: corners.reduce((s, p) => s + p.y, 0) / 4,
+          });
+          const lbl = new Konva.Text({
+            x: cp.x, y: cp.y,
+            text: lbls[idx++] || '',
+            fontSize: Math.max(9, Math.min(13, SW / 90)),
+            fill: '#fff', fontStyle: 'bold', align: 'center',
+            shadowColor: 'rgba(0,0,0,.9)', shadowBlur: 3,
+            shadowOffsetX: 1, shadowOffsetY: 1,
+            listening: false, name: '_z',
+          });
+          lbl.offsetX(lbl.width() / 2);
+          lbl.offsetY(lbl.height() / 2);
           layer.add(lbl);
         }
       }
 
-    }else{
+    } else {
       /* Unsplit lane — dashed outline + prompt */
+      const qpx = qToS(la.quad);
       layer.add(new Konva.Line({
-        points:qpx.flatMap(p=>[p.x,p.y]),
-        closed:true,
-        fill:isSel?'rgba(249,115,22,.14)':'rgba(249,115,22,.06)',
-        stroke:isSel?'#f97316':'rgba(249,115,22,.45)',
-        strokeWidth:isSel?2:1.2,dash:[8,5],
-        listening:false,name:'_z',
+        points: qpx.flatMap(p => [p.x, p.y]),
+        closed: true,
+        fill: isSel ? 'rgba(249,115,22,.14)' : 'rgba(249,115,22,.06)',
+        stroke: isSel ? '#f97316' : 'rgba(249,115,22,.45)',
+        strokeWidth: isSel ? 2 : 1.2, dash: [8, 5],
+        listening: false, name: '_z',
       }));
-      const cx=qpx.reduce((s,p)=>s+p.x,0)/4,cy=qpx.reduce((s,p)=>s+p.y,0)/4;
-      const lbl=new Konva.Text({x:cx,y:cy,
-        text:'[Set spaces & split]',fontSize:11,
-        fill:'rgba(249,115,22,.85)',align:'center',
-        listening:false,name:'_z'});
-      lbl.offsetX(lbl.width()/2);lbl.offsetY(lbl.height()/2);
+      const cx = qpx.reduce((s, p) => s + p.x, 0) / 4;
+      const cy = qpx.reduce((s, p) => s + p.y, 0) / 4;
+      const lbl = new Konva.Text({
+        x: cx, y: cy, text: '[Set spaces & split]',
+        fontSize: 11, fill: 'rgba(249,115,22,.85)', align: 'center',
+        listening: false, name: '_z',
+      });
+      lbl.offsetX(lbl.width() / 2);
+      lbl.offsetY(lbl.height() / 2);
       layer.add(lbl);
     }
   });
@@ -823,210 +893,184 @@ function redraw(){
 /* ================================================================
    SELECTION / ACTIONS
 ================================================================ */
-function deselect(){selectedId=null;redraw();refreshList();}
+function deselect() { selectedId = null; activeDot = null; redraw(); refreshList(); }
 
-function deleteSelected(){
-  if(!selectedId){toast('Select a lane first','err');return;}
-  lanes=lanes.filter(l=>l.uuid!==selectedId);
-  if(pendingId===selectedId){pendingId=null;document.getElementById('btn-split').disabled=true;}
-  selectedId=null;
-  redraw();refreshList();
+function deleteSelected() {
+  if (!selectedId) { toast('Select a lane first', 'err'); return; }
+  lanes = lanes.filter(l => l.uuid !== selectedId);
+  if (pendingId === selectedId) {
+    pendingId = null;
+    document.getElementById('btn-split').disabled = true;
+  }
+  selectedId = null; activeDot = null;
+  redraw(); refreshList();
 }
 
-/* Local canvas clear — does NOT call server */
-function clearCanvas(){
-  lanes=[];selectedId=null;pendingId=null;
-  document.getElementById('btn-split').disabled=true;
-  cancelDraw(true);redraw();refreshList();
+function clearCanvas() {
+  lanes = []; selectedId = null; pendingId = null; activeDot = null;
+  document.getElementById('btn-split').disabled = true;
+  cancelDraw(true); redraw(); refreshList();
 }
 
 /* ================================================================
    ZONE LIST
 ================================================================ */
-function refreshList(){
-  const el=document.getElementById('zlist');
-  const totalSpaces=lanes.reduce((s,l)=>s+Math.max(0,l.cols*l.rows),0);
-  document.getElementById('gcnt').textContent=lanes.length;
-  document.getElementById('scnt').textContent=totalSpaces;
+function refreshList() {
+  const el = document.getElementById('zlist');
+  const totalSpaces = lanes.reduce((s, l) => s + Math.max(0, l.cols * l.rows), 0);
+  document.getElementById('gcnt').textContent = lanes.length;
+  document.getElementById('scnt').textContent = totalSpaces;
 
-  const items=[];
-  lanes.forEach(la=>{
-    const isSel=selectedId===la.uuid;
-    const total=la.cols*la.rows;
-    const lbls=total>0?N.labels(la):[];
-    const range=lbls.length?` ${lbls[0]}–${lbls[lbls.length-1]}`:'';
-    items.push(`<div class="z-item${isSel?' sel':''}" onclick="selById('${la.uuid}')">
+  const items = [];
+  lanes.forEach(la => {
+    const isSel  = selectedId === la.uuid;
+    const total  = la.cols * la.rows;
+    const lbls   = total > 0 ? N.labels(la) : [];
+    const range  = lbls.length ? ` ${lbls[0]}–${lbls[lbls.length-1]}` : '';
+    items.push(`<div class="z-item${isSel ? ' sel' : ''}" onclick="selById('${la.uuid}')">
       <div>
-        <span class="nm">${la.prefix||'?'} Lane</span>
-        <span class="mt">${total?total+' spaces'+range:'unsplit'}</span>
+        <span class="nm">${la.prefix || '?'} Lane</span>
+        <span class="mt">${total ? total + ' spaces' + range : 'unsplit'}</span>
       </div>
       <button class="del" onclick="event.stopPropagation();delById('${la.uuid}')">&times;</button>
     </div>`);
   });
-  el.innerHTML=items.length?items.join(''):'<div style="color:var(--text-secondary);font-size:12px;">No lanes yet.</div>';
+  el.innerHTML = items.length
+    ? items.join('')
+    : '<div style="color:var(--text-secondary);font-size:12px;">No lanes yet.</div>';
 }
 
-function selById(id){selectedId=id;redraw();refreshList();}
-function delById(id){
-  lanes=lanes.filter(l=>l.uuid!==id);
-  if(pendingId===id){pendingId=null;document.getElementById('btn-split').disabled=true;}
-  if(selectedId===id)selectedId=null;
-  redraw();refreshList();
+function selById(id) { selectedId = id; activeDot = null; redraw(); refreshList(); }
+function delById(id) {
+  lanes = lanes.filter(l => l.uuid !== id);
+  if (pendingId === id) { pendingId = null; document.getElementById('btn-split').disabled = true; }
+  if (selectedId === id) { selectedId = null; activeDot = null; }
+  redraw(); refreshList();
 }
 
 /* ================================================================
-   CONFIRM MODAL — shared for 'clear' and 'replace'
+   CONFIRM MODAL
 ================================================================ */
-let confirmMode=null;  // 'clear' | 'replace'
-let modalLoading=false;
-let currentOpId=0;     // anti-race guard
+let confirmMode = null;
+let modalLoading = false;
+let currentOpId  = 0;
 
-function openModal(modeStr){
-  confirmMode=modeStr;
-  const title=document.getElementById('modal-title');
-  const body=document.getElementById('modal-body');
-  const confirmBtn=document.getElementById('modal-confirm');
-  const spaceCount=lanes.reduce((s,l)=>s+Math.max(0,l.cols*l.rows),0);
-
-  if(modeStr==='clear'){
-    title.textContent='Delete All Zones?';
-    body.innerHTML=`This will delete <strong>ALL saved zones</strong> for camera <strong>${CAM}</strong>.<br>This action <strong style="color:var(--red)">cannot be undone</strong>.`;
-    confirmBtn.textContent='Delete All';
-    confirmBtn.className='btn btn-red';
-  }else{
-    title.textContent='Replace All Zones?';
-    body.innerHTML=`This will <strong>delete existing zones</strong> then save the current canvas (<strong>${spaceCount} spaces</strong>) for camera <strong>${CAM}</strong>.<br>Continue?`;
-    confirmBtn.textContent='Replace';
-    confirmBtn.className='btn btn-orange';
-  }
-
+function openModal(modeStr) {
+  confirmMode = modeStr;
+  const spaceCount = lanes.reduce((s, l) => s + Math.max(0, l.cols * l.rows), 0);
+  document.getElementById('modal-title').textContent =
+    modeStr === 'clear' ? 'Delete All Zones?' : 'Replace All Zones?';
+  document.getElementById('modal-body').innerHTML = modeStr === 'clear'
+    ? `This will delete <strong>ALL saved zones</strong> for camera <strong>${CAM}</strong>.<br>This action <strong style="color:var(--red)">cannot be undone</strong>.`
+    : `This will <strong>delete existing zones</strong> then save the current canvas (<strong>${spaceCount} spaces</strong>) for camera <strong>${CAM}</strong>.<br>Continue?`;
+  document.getElementById('modal-confirm').textContent  = modeStr === 'clear' ? 'Delete All' : 'Replace';
+  document.getElementById('modal-confirm').className    = 'btn ' + (modeStr === 'clear' ? 'btn-red' : 'btn-orange');
   setModalLoading(false);
   document.getElementById('confirm-modal').classList.remove('hidden');
 }
-
-/* Force-close regardless of busy state — called internally after ops finish */
-function _forceCloseModal(){
-  modalLoading=false;
+function _forceCloseModal() {
+  modalLoading = false;
   document.getElementById('confirm-modal').classList.add('hidden');
-  confirmMode=null;
+  confirmMode = null;
 }
-
-function closeModal(){
-  if(modalLoading)return; // user-initiated close blocked while busy
-  _forceCloseModal();
+function closeModal() { if (modalLoading) return; _forceCloseModal(); }
+function setModalLoading(on) {
+  modalLoading = on;
+  document.getElementById('modal-confirm').disabled = on;
+  document.getElementById('modal-cancel').disabled  = on;
+  document.getElementById('modal-confirm').textContent = on
+    ? 'Working…' : (confirmMode === 'clear' ? 'Delete All' : 'Replace');
 }
-
-function setModalLoading(on){
-  modalLoading=on;
-  document.getElementById('modal-confirm').disabled=on;
-  document.getElementById('modal-cancel').disabled=on;
-  document.getElementById('modal-confirm').textContent=on
-    ?'Working…'
-    :(confirmMode==='clear'?'Delete All':'Replace');
-}
-
-async function runModalAction(){
-  if(!confirmMode||modalLoading)return;
-  const opId=++currentOpId;
-  const mode=confirmMode; // capture before async ops
-
+async function runModalAction() {
+  if (!confirmMode || modalLoading) return;
+  const opId = ++currentOpId;
+  const m    = confirmMode;
   setModalLoading(true);
-  try{
-    if(mode==='clear'){
+  try {
+    if (m === 'clear') {
       await serverDeleteAll();
-      if(opId!==currentOpId)return; // stale — a newer op took over
-      clearCanvas();
-      _forceCloseModal();
-      toast('All zones deleted','ok');
-
-    }else if(mode==='replace'){
+      if (opId !== currentOpId) return;
+      clearCanvas(); _forceCloseModal();
+      toast('All zones deleted', 'ok');
+    } else {
       await serverDeleteAll();
-      if(opId!==currentOpId)return;
-      const saved=await serverSave();
-      if(opId!==currentOpId)return;
-      /* Clear canvas and reload from server — suppress auto-toast from loadExisting */
+      if (opId !== currentOpId) return;
+      const saved = await serverSave();
+      if (opId !== currentOpId) return;
       clearCanvas();
-      await loadExisting(true); // silent=true → no "Loaded N zones" toast
-      if(opId!==currentOpId)return;
+      await loadExisting(true);
+      if (opId !== currentOpId) return;
       _forceCloseModal();
-      toast(`Replaced and saved ${saved} zones ✓`,'ok');
+      toast(`Replaced and saved ${saved} zones ✓`, 'ok');
     }
-  }catch(e){
-    if(opId===currentOpId){
-      _forceCloseModal();
-      toast('Error: '+e.message,'err');
-    }
+  } catch(e) {
+    if (opId === currentOpId) { _forceCloseModal(); toast('Error: ' + e.message, 'err'); }
   }
 }
 
 /* ================================================================
    SERVER HELPERS
 ================================================================ */
-async function serverDeleteAll(){
-  const r=await fetch('/admin/zones/delete-all',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({camera_id:CAM}),
+async function serverDeleteAll() {
+  const r = await fetch('/admin/zones/delete-all', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ camera_id: CAM }),
   });
-  const d=await r.json();
-  if(!r.ok)throw new Error(d.error||'Delete failed');
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Delete failed');
 }
 
-async function serverSave(){
-  const payload=buildPayload();
-  if(!payload.length)return 0;
-  const r=await fetch('/admin/zones/bulk',{
-    method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({camera_id:CAM,zones:payload,clear_existing:false}),
+async function serverSave() {
+  const payload = buildPayload();
+  if (!payload.length) return 0;
+  const r = await fetch('/admin/zones/bulk', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ camera_id: CAM, zones: payload, clear_existing: false }),
   });
-  const d=await r.json();
-  if(!r.ok)throw new Error(d.error||'Save failed');
-  return d.saved||payload.length;
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Save failed');
+  return d.saved || payload.length;
 }
 
-/* Materialise every compartment into polygon_json (% coords).
-   YOLO geometry: full-coverage (no gap) so detections aren't missed.
-   Lane metadata (quad, dividers, gapPct) is embedded as JSON in the
-   `name` field of the FIRST zone of each lane using a sentinel prefix
-   "__campark_meta__". The worker ignores `name`; only `polygon_json`
-   is used for occupancy. This lets loadExisting() do a perfect round-trip
-   without any schema changes. */
-function buildPayload(){
-  const payload=[];
-  lanes.forEach(la=>{
-    if(la.cols<1||la.rows<1)return;
-    const lbls=N.labels(la);
-    let idx=0;
+/* ================================================================
+   BUILD PAYLOAD
+   Serialises each child zone as a 4-point polygon in % coords.
+   Lane metadata (full pts grid) is stored in the `name` field of
+   the first zone as __campark_meta__{...} for perfect round-trip.
+================================================================ */
+function buildPayload() {
+  const payload = [];
+  lanes.forEach(la => {
+    if (la.cols < 1 || la.rows < 1) return;
+    const lbls = N.labels(la);
+    let idx = 0;
 
-    /* Serialise lane metadata for round-trip reload */
-    const meta=JSON.stringify({
-      quad:la.quad,
-      dividersU:la.dividersU,
-      dividersV:la.dividersV,
-      cols:la.cols,
-      rows:la.rows,
-      start:la.start,
-      dir:la.dir,
-      gapPct:la.gapPct,
-      prefix:la.prefix,
-      ci:la.ci,
+    const meta = JSON.stringify({
+      pts:    la.pts,
+      cols:   la.cols,
+      rows:   la.rows,
+      start:  la.start,
+      dir:    la.dir,
+      gapPct: la.gapPct,
+      prefix: la.prefix,
+      ci:     la.ci,
     });
 
-    for(let r=0;r<la.rows;r++){
-      const v0=la.dividersV[r],v1=la.dividersV[r+1];
-      for(let col=0;col<la.cols;col++){
-        const u0=la.dividersU[col],u1=la.dividersU[col+1];
-        /* YOLO polygon: full-coverage (gap=0) — accurate for detection */
-        const pts=G.cellQuad(la.quad,u0,u1,v0,v1)
-          .map(p=>[+(p.x*100).toFixed(4),+(p.y*100).toFixed(4)]);
-        const lbl=lbls[idx++]||`Z${idx}`;
-        const isFirst=(r===0&&col===0);
+    for (let r = 0; r < la.rows; r++) {
+      for (let col = 0; col < la.cols; col++) {
+        /* Full-coverage polygon (gap=0) for YOLO detection accuracy */
+        const corners = cellCornersN(la, r, col);
+        const pts4 = corners.map(p => [
+          +(p.x * 100).toFixed(4),
+          +(p.y * 100).toFixed(4),
+        ]);
+        const lbl     = lbls[idx++] || `Z${idx}`;
+        const isFirst = (r === 0 && col === 0);
         payload.push({
-          zone_id:lbl,
-          /* First zone of each lane carries the lane metadata in `name`.
-             All others use plain label name. Worker uses only polygon_json. */
-          name: isFirst ? '__campark_meta__'+meta : lbl,
-          capacity_units:1,
-          polygon_json:JSON.stringify(pts),
+          zone_id:        lbl,
+          name:           isFirst ? '__campark_meta__' + meta : lbl,
+          capacity_units: 1,
+          polygon_json:   JSON.stringify(pts4),
         });
       }
     }
@@ -1035,30 +1079,31 @@ function buildPayload(){
 }
 
 /* ================================================================
-   SAVE ALL (explicit button — no confirmation needed)
+   SAVE ALL
 ================================================================ */
-async function saveZones(){
-  const payload=buildPayload();
-  if(!payload.length){toast('No spaces to save','err');return;}
+async function saveZones() {
+  const payload = buildPayload();
+  if (!payload.length) { toast('No spaces to save', 'err'); return; }
   setActionBtns(true);
-  try{
-    const r=await fetch('/admin/zones/bulk',{
-      method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({camera_id:CAM,zones:payload,clear_existing:false}),
+  try {
+    const r = await fetch('/admin/zones/bulk', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ camera_id: CAM, zones: payload, clear_existing: false }),
     });
-    const d=await r.json();
-    if(!r.ok){toast(d.error||'Save failed','err');return;}
-    toast(`Saved ${d.saved} zones ✓`,'ok');
-  }catch(e){toast('Network error: '+e.message,'err');}
-  finally{setActionBtns(false);}
+    const d = await r.json();
+    if (!r.ok) { toast(d.error || 'Save failed', 'err'); return; }
+    toast(`Saved ${d.saved} zones ✓`, 'ok');
+  } catch(e) { toast('Network error: ' + e.message, 'err'); }
+  finally { setActionBtns(false); }
 }
 
-function setActionBtns(disabled){
-  ['btn-save','btn-clear','btn-replace'].forEach(id=>{
-    const el=document.getElementById(id);
-    if(el)el.disabled=disabled;
+function setActionBtns(disabled) {
+  ['btn-save', 'btn-clear', 'btn-replace'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = disabled;
   });
 }
+
 
 /* ================================================================
    LOAD EXISTING (on page load or after replace)
@@ -1089,17 +1134,45 @@ async function loadExisting(silent=false){
       if(nameStr.startsWith('__campark_meta__')){
         try{
           const la=JSON.parse(nameStr.slice('__campark_meta__'.length));
-          /* Normalise quad just in case (old saves may be in % space) */
-          const maxCoord=Math.max(...la.quad.flatMap(p=>[p.x,p.y]));
-          if(maxCoord>1)la.quad=la.quad.map(p=>({x:p.x/100,y:p.y/100}));
-          la.quad=G.orderQuad(la.quad.map(p=>G.clampN(p)));
-          /* Ensure dividers are arrays */
-          if(!Array.isArray(la.dividersU)||la.dividersU.length<2)
-            la.dividersU=Array.from({length:la.cols+1},(_,i)=>i/la.cols);
-          if(!Array.isArray(la.dividersV)||la.dividersV.length<2)
-            la.dividersV=Array.from({length:la.rows+1},(_,i)=>i/la.rows);
           la.uuid=uuid();
-          la.ci=palIdx++%PAL.length;
+          la.ci=(la.ci!=null?la.ci:palIdx)%PAL.length;
+          palIdx++;
+
+          /* NEW FORMAT: pts grid */
+          if(Array.isArray(la.pts)&&la.pts.length>=2){
+            /* Normalise pts if stored in % space (legacy) */
+            const maxV=Math.max(...la.pts.flatMap(row=>row.flatMap(p=>[p.x,p.y])));
+            if(maxV>1)la.pts=la.pts.map(row=>row.map(p=>({x:p.x/100,y:p.y/100})));
+            la.pts=la.pts.map(row=>row.map(p=>G.clampN(p)));
+            /* Derive quad from outer corners for unsplit rendering fallback */
+            const R=la.rows,C=la.cols;
+            la.quad=[la.pts[0][0],la.pts[0][C],la.pts[R][C],la.pts[R][0]];
+
+          /* LEGACY FORMAT: quad + dividersU/V — upgrade to pts grid */
+          }else if(Array.isArray(la.quad)){
+            const maxCoord=Math.max(...la.quad.flatMap(p=>[p.x,p.y]));
+            if(maxCoord>1)la.quad=la.quad.map(p=>({x:p.x/100,y:p.y/100}));
+            la.quad=G.orderQuad(la.quad.map(p=>G.clampN(p)));
+            if(!Array.isArray(la.dividersU)||la.dividersU.length<2)
+              la.dividersU=Array.from({length:la.cols+1},(_,i)=>i/la.cols);
+            if(!Array.isArray(la.dividersV)||la.dividersV.length<2)
+              la.dividersV=Array.from({length:la.rows+1},(_,i)=>i/la.rows);
+            /* Convert dividers → pts grid */
+            la.pts=[];
+            for(let r=0;r<=la.rows;r++){
+              const row=[];
+              for(let c=0;c<=la.cols;c++){
+                const u=la.dividersU[c],v=la.dividersV[r];
+                const[TL,TR,BR,BL]=la.quad;
+                row.push(G.clampN({
+                  x:TL.x*(1-u)*(1-v)+TR.x*u*(1-v)+BR.x*u*v+BL.x*(1-u)*v,
+                  y:TL.y*(1-u)*(1-v)+TR.y*u*(1-v)+BR.y*u*v+BL.y*(1-u)*v,
+                }));
+              }
+              la.pts.push(row);
+            }
+          }else{ return; }
+
           metaByPrefix[la.prefix]=la;
         }catch(e){ console.warn('meta parse failed',e); }
         return; // don't add to regularZones
@@ -1155,10 +1228,23 @@ async function loadExisting(silent=false){
         }
         dividersU.push(1);
 
+        /* Convert recovered dividers → pts grid */
+        const recPts=[];
+        for(let rv=0;rv<=1;rv++){
+          const row=[];
+          for(let k=0;k<=n;k++){
+            const u=dividersU[k],v=rv;
+            const[TL,TR,BR,BL]=quad;
+            row.push(G.clampN({
+              x:TL.x*(1-u)*(1-v)+TR.x*u*(1-v)+BR.x*u*v+BL.x*(1-u)*v,
+              y:TL.y*(1-u)*(1-v)+TR.y*u*(1-v)+BR.y*u*v+BL.y*(1-u)*v,
+            }));
+          }
+          recPts.push(row);
+        }
         lanes.push({
-          uuid:uuid(),quad,prefix:pfx,start:zs[0].num,
+          uuid:uuid(),quad,pts:recPts,prefix:pfx,start:zs[0].num,
           cols:n,rows:1,dir:'inc',gapPct:0,
-          dividersU,dividersV:[0,1],
           ci:palIdx++%PAL.length,
         });
       });
