@@ -7,6 +7,7 @@ import subprocess
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlparse
 
 import requests
 from typing import Optional, Tuple
@@ -93,7 +94,7 @@ def login_page():
             session["admin_logged_in"] = True
             session["admin_user"] = username
             session.permanent = True
-            next_url = request.args.get("next", "/admin/scada")
+            next_url = _safe_next_url(request.args.get("next", "/admin/scada"))
             return redirect(next_url)
         error = "Invalid username or password"
     return render_template("login.html", error=error, version=APP_VERSION)
@@ -132,6 +133,29 @@ def parse_iso(value):
     if value.endswith("Z"):
         value = value[:-1] + "+00:00"
     return datetime.fromisoformat(value)
+
+
+def _safe_next_url(next_url: Optional[str], default: str = "/admin/scada") -> str:
+    if not next_url:
+        return default
+    parsed = urlparse(next_url)
+    if parsed.scheme or parsed.netloc:
+        return default
+    if not next_url.startswith("/") or next_url.startswith("//"):
+        return default
+    return next_url
+
+
+def _safe_image_path(relative_path: str) -> Optional[str]:
+    try:
+        clean_relative = os.path.normpath(relative_path).lstrip("/\\")
+        image_root = os.path.realpath(IMAGE_ROOT)
+        abs_path = os.path.realpath(os.path.join(image_root, clean_relative))
+        if os.path.commonpath([image_root, abs_path]) != image_root:
+            return None
+        return abs_path
+    except (TypeError, ValueError):
+        return None
 
 
 def send_telegram(message):
@@ -453,7 +477,9 @@ def evidence(event_id):  # type: ignore[return-value]
         if not snapshot:
             return jsonify({"error": "snapshot_not_found"}), 404
 
-        abs_path = os.path.join(IMAGE_ROOT, snapshot.file_path)
+        abs_path = _safe_image_path(snapshot.file_path)
+        if not abs_path:
+            return jsonify({"error": "invalid_file_path"}), 400
         if not os.path.exists(abs_path):
             return jsonify({"error": "file_not_found"}), 404
 
@@ -479,7 +505,9 @@ def latest_snapshot(camera_id):
         if not snapshot:
             return jsonify({"error": "snapshot_not_found"}), 404
 
-        abs_path = os.path.join(IMAGE_ROOT, snapshot.file_path)
+        abs_path = _safe_image_path(snapshot.file_path)
+        if not abs_path:
+            return jsonify({"error": "invalid_file_path"}), 400
         if not os.path.exists(abs_path):
             return jsonify({"error": "file_not_found"}), 404
 
@@ -1148,7 +1176,7 @@ def admin_cameras_detail_json():
                 "ingest_protocol": cam.ingest_protocol or "ftp",
                 "status": cam.status or "UNKNOWN",
                 "ftp_username": cam.ftp_username,
-                "ftp_password": cam.ftp_password_hash,
+                "ftp_password_set": bool(cam.ftp_password_hash),
                 "last_seen_at": to_iso(cam.last_seen_at),
                 "last_inference": to_iso(latest_snap.processed_at) if latest_snap else None,
                 "snapshots_1h": snaps_1h,
@@ -1168,12 +1196,15 @@ def admin_zones():
 
 @app.route("/admin/zones.json", methods=["GET"])
 def admin_zones_json():
+    """Public-facing zones endpoint for dashboards and the YOLO worker.
+    Returns only real parking spaces (no meta sentinels).
+    Uses LEFT OUTER JOIN so zones missing a ZoneState row are still returned."""
     session = SessionLocal()
     try:
         camera_filter = request.args.get("camera_id")
         state_filter = request.args.get("state")
 
-        query = session.query(Zone, ZoneState, Camera).join(
+        query = session.query(Zone, ZoneState, Camera).outerjoin(
             ZoneState, ZoneState.zone_id == Zone.id
         ).join(Camera, Camera.id == Zone.camera_id)
 
@@ -1197,15 +1228,16 @@ def admin_zones_json():
                 continue
 
             capacity = z.capacity_units or 1
-            occupied = zs.occupied_units or 0
+            occupied = (zs.occupied_units or 0) if zs else 0
             total_occupied += occupied
             total_capacity += capacity
 
-            if zs.state == "FREE":
+            state = (zs.state or "FREE") if zs else "FREE"
+            if state == "FREE":
                 count_free += 1
-            elif zs.state == "PARTIAL":
+            elif state == "PARTIAL":
                 count_partial += 1
-            elif zs.state == "FULL":
+            elif state == "FULL":
                 count_full += 1
 
             zones.append({
@@ -1213,10 +1245,10 @@ def admin_zones_json():
                 "name": z.name,
                 "camera_id": cam.camera_id,
                 "polygon_json": z.polygon_json,
-                "state": zs.state or "FREE",
+                "state": state,
                 "occupied": occupied,
                 "capacity": capacity,
-                "last_change": to_iso(zs.last_change_at),
+                "last_change": to_iso(zs.last_change_at) if zs else None,
             })
 
         return jsonify({
@@ -1229,6 +1261,33 @@ def admin_zones_json():
                 "total_capacity": total_capacity,
             },
         })
+    finally:
+        session.close()
+
+
+@app.route("/admin/zones/editor-raw.json", methods=["GET"])
+def admin_zones_editor_raw():
+    """Raw zones endpoint for the zone editor only.
+    Returns all rows including __campark_meta__ sentinels for perfect lane round-trip."""
+    session = SessionLocal()
+    try:
+        camera_filter = request.args.get("camera_id")
+        query = session.query(Zone, Camera).join(Camera, Camera.id == Zone.camera_id)
+        if camera_filter:
+            query = query.filter(Camera.camera_id == camera_filter)
+        rows = query.all()
+
+        zones = []
+        for z, cam in rows:
+            zones.append({
+                "zone_id": z.zone_id,
+                "name": z.name,
+                "camera_id": cam.camera_id,
+                "polygon_json": z.polygon_json,
+                "capacity": z.capacity_units or 1,
+            })
+
+        return jsonify({"zones": zones})
     finally:
         session.close()
 

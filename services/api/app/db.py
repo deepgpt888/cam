@@ -69,7 +69,7 @@ class Zone(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     camera_id: Mapped[int] = mapped_column(ForeignKey("cameras.id"))
     zone_id: Mapped[str] = mapped_column(String(100))
-    name: Mapped[Optional[str]] = mapped_column(String(255), default=None)
+    name: Mapped[Optional[str]] = mapped_column(Text, default=None)
     polygon_json: Mapped[str] = mapped_column(Text)
     capacity_units: Mapped[Optional[int]] = mapped_column(default=None)
     created_at: Mapped[Optional[datetime]] = mapped_column(default=None)

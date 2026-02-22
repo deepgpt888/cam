@@ -366,7 +366,7 @@ let drag=null;
 
 const MIN_GAP=0.012;   // minimum UV spacing between adjacent dividers
 const FINE_GAIN=0.35;  // divider drag attenuation (slow fine-tune)
-const HIT_CORNER=14;   // px
+const HIT_CORNER=18;   // px
 const HIT_DIV=9;       // px
 
 let konva,layer;
@@ -507,6 +507,7 @@ function onDown(){
     drag={kind:'divV',laneId:hit.laneId,divIdx:hit.idx,
       origDivV:[...la.dividersV],sx:pos.x,sy:pos.y};
   }else if(hit.kind==='move'){
+    if(la.cols>0&&la.rows>0)return;
     drag={kind:'move',laneId:hit.laneId,
       origQuad:la.quad.map(p=>({...p})),sx:pos.x,sy:pos.y};
   }
@@ -598,8 +599,11 @@ function hitTest(pos){
       }
     }
 
-    /* 4) Inside → move whole lane */
-    if(G.ptInPoly(pos,qpx))return{kind:'move',laneId:la.uuid};
+    /* 4) Inside → move whole lane (disabled after split) */
+    if(G.ptInPoly(pos,qpx)){
+      const hasSplit=la.cols>0&&la.rows>0;
+      if(!hasSplit)return{kind:'move',laneId:la.uuid};
+    }
   }
   return null;
 }
@@ -1072,7 +1076,7 @@ function setActionBtns(disabled){
 ================================================================ */
 async function loadExisting(silent=false){
   try{
-    const r=await fetch('/admin/zones.json?camera_id='+CAM);
+    const r=await fetch('/admin/zones/editor-raw.json?camera_id='+CAM);
     const d=await r.json();
     if(!d.zones?.length)return;
 
