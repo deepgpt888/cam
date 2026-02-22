@@ -1223,10 +1223,6 @@ def admin_zones_json():
         count_full = 0
 
         for z, zs, cam in rows:
-            # Skip lane-metadata sentinel zones (parent outlines, not real spaces)
-            if z.name and z.name.startswith("__campark_meta__"):
-                continue
-
             capacity = z.capacity_units or 1
             occupied = (zs.occupied_units or 0) if zs else 0
             total_occupied += occupied
@@ -1240,9 +1236,12 @@ def admin_zones_json():
             elif state == "FULL":
                 count_full += 1
 
+            # Meta-sentinel zones are real spaces; display zone_id as name
+            display_name = z.zone_id if (z.name and z.name.startswith("__campark_meta__")) else z.name
+
             zones.append({
                 "zone_id": z.zone_id,
-                "name": z.name,
+                "name": display_name,
                 "camera_id": cam.camera_id,
                 "polygon_json": z.polygon_json,
                 "state": state,

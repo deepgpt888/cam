@@ -1255,7 +1255,7 @@ async function loadExisting(silent=false){
     if(konva)konva.container().style.cursor='default';
 
     redraw();refreshList();
-    const total=d.zones.filter(z=>!(z.name||'').startsWith('__campark_meta__')).length;
+    const total=d.zones.length;
     if(!silent)toast('Loaded '+total+' existing zones','ok');
   }catch(e){
     console.warn('loadExisting error:',e);

@@ -198,11 +198,8 @@ class InferencePipeline:
         # ---- Zone occupancy ----
         zones = session.query(Zone).filter(Zone.camera_id == camera.id).all()
         for zone in zones:
-            # Skip lane-metadata sentinel zones written by the zone editor
-            # (name starts with "__campark_meta__" — these are parent outlines,
-            #  not individual parking spaces, and must not be counted for occupancy)
-            if zone.name and zone.name.startswith("__campark_meta__"):
-                continue
+            # __campark_meta__ zones are real parking spaces whose name field
+            # carries lane-editor metadata.  Process them normally for occupancy.
             zone_polygon = json.loads(zone.polygon_json)
 
             if self.yolo_enabled and self.yolo_processor:
